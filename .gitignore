@@ -42,4 +42,7 @@ testem.log
 Thumbs.db
 .vercel
 
-.env
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
