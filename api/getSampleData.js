@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import * as dotenvx from '@dotenvx/dotenvx';
 
 export default async function handler(req, res) {
   // Initialize Supabase client
   const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
+    dotenvx.get('SUPABASE_URL'),
+    dotenvx.get('SUPABASE_ANON_KEY')
   );
 
   // Query your table

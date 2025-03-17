@@ -1,4 +1,4 @@
-.env*
-.flaskenv*
-!.env.project
-!.env.vault
+.env.keys
+!.env
+!.env.staging
+!.env.production

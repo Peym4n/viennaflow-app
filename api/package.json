@@ -1,6 +1,7 @@
 {
   "name": "api",
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.39.0",
     "@supabase/supabase-js": "^2.49.1"
   }
 }
