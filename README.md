@@ -1,6 +1,5 @@
 # ViennaFlow
 Real-Time Transit, Effortless Journeys!
-https://app.viennaflow.at
 
 ## Prerequisites
 
@@ -15,17 +14,12 @@ Before you begin, ensure you have the following installed:
 
 Follow these steps to run the project locally:
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   ```
-
-2. Install project dependencies:
+1. Install project dependencies:
    ```bash
    npm install
    ```
 
-3. Set up Vercel:
+2. Set up Vercel:
    - Create a Vercel account at [vercel.com](https://vercel.com) using your GitHub account
    - Log in to Vercel CLI and link your project:
      ```bash
@@ -33,9 +27,9 @@ Follow these steps to run the project locally:
      vercel link
      ```
 
-4. Request the decryption key from the project maintainers - this is required to decrypt environment variables
+3. Request the decryption key from the project maintainers - this is required to decrypt environment variables
 
-5. Start the development server:
+4. Start the development server:
    ```bash
    npm run dev
    ```
