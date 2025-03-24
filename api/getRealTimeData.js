@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (!rbl) {
     return res.status(400).json({ error: "rbl number ist mandatory" });
   }
-
+  console.log("conflict");
   try {
     const { data } = await axios.get(
       `https://www.wienerlinien.at/ogd_realtime/monitor?rbl=${rbl}`
