@@ -54,5 +54,5 @@ export default async function handler(req, res) {
   };
 
   // Daten als JSON zurückgeben
-  res.status(200).json(data);
+  res.status(200).json(geoJsonData);
 }
