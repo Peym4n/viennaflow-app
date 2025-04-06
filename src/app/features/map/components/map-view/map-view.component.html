@@ -1,1 +1,27 @@
-<p>map-view works!</p>
+<div class="map-container">
+  <!-- Google Map Container -->
+  <div #mapContainer class="google-map"></div>
+
+  <!-- Loading Overlay -->
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <mat-spinner diameter="48" color="accent"></mat-spinner>
+      <p class="loading-text">Getting your location...</p>
+    </div>
+  }
+
+  <!-- Location Error Message -->
+  @if (hasLocationError) {
+    <div class="error-overlay">
+      <mat-icon class="error-icon">location_disabled</mat-icon>
+      <p>Please enable location services to use this app</p>
+    </div>
+  }
+
+  <!-- Map Controls -->
+  <div class="map-controls">
+    <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()">
+      <mat-icon>my_location</mat-icon>
+    </button>
+  </div>
+</div>

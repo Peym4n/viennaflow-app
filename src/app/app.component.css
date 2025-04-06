@@ -59,16 +59,20 @@
 
 /* View container styles */
 .view-container {
-  flex: 1;
+  flex: 1; /* Take up remaining space */
   width: 100%;
-  padding-top: 64px; /* Height of the navbar */
   box-sizing: border-box;
   position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1rem;
-  min-height: 100%;
+  overflow: hidden; /* Prevent scrolling */
+  padding-top: 64px; /* Account for fixed navbar height */
+}
+
+/* Router container to ensure components inside router-outlet display correctly */
+.router-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: block; /* Crucial for proper rendering */
 }
 
 /* Mobile adjustments */

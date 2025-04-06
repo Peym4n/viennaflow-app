@@ -15,6 +15,7 @@ if (!fs.existsSync(environmentsDir)) {
 
 // Get API keys using dotenvx (same approach as in getSampleData.js)
 const googleMapsApiKey = dotenvx.get('GOOGLE_MAPS_API_KEY');
+const googleMapsMapId = dotenvx.get('GOOGLE_MAPS_MAP_ID');
 
 // Get current environment from Vercel if available
 const environment = process.env.VERCEL_ENV || 'development';
@@ -29,6 +30,7 @@ export const environment = {
   environment: '${environment}',
   googleMaps: {
     apiKey: '${googleMapsApiKey || ''}',
+    mapId: '${googleMapsMapId || ''}'
   },
 };
 `;

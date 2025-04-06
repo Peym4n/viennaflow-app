@@ -4,9 +4,11 @@
   <!-- Navbar Component -->
   <app-navbar></app-navbar>
   
-  <!-- Main Content Area for different views -->
-  <main class="view-container">
-    <!-- Router outlet for different views/routes -->
-    <router-outlet></router-outlet>
-  </main>
+  <!-- Main Content Area (100% width/height container) -->
+  <div class="view-container">
+    <!-- Router outlet wrapper to ensure correct rendering -->
+    <div class="router-container">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
 </div>
