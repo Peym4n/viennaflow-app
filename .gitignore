@@ -28,6 +28,9 @@ yarn-error.log
 !.vscode/extensions.json
 .history/*
 
+# windsurf rules
+.windsurfrules
+
 # Miscellaneous
 /.angular/cache
 .sass-cache/
