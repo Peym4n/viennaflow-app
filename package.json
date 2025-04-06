@@ -2,6 +2,7 @@
   "name": "viennaflow-app",
   "version": "0.0.0",
   "scripts": {
+    "prepare": "husky",
     "ng": "ng",
     "dev:frontend": "ng serve",
     "dev:backend": "cross-env NODE_NO_WARNINGS=1 vercel dev",

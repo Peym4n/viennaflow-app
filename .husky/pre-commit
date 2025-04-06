@@ -1,0 +1,48 @@
+# Check all .env files for unencrypted values
+# echo "Checking .env files for unencrypted values..."
+
+ERROR_COUNT=0
+
+# Find all .env files in the root directory
+for ENV_FILE in $(find . -maxdepth 1 -name ".env*" -type f); do
+  # Skip .env.keys file
+  if [ "$(basename "$ENV_FILE")" = ".env.keys" ]; then
+    continue
+  fi
+
+  if [ -f "$ENV_FILE" ]; then
+    # echo "Checking $ENV_FILE..."
+    # Read each line in the .env file
+    while IFS= read -r LINE || [ -n "$LINE" ]; do
+      # Skip empty lines, comments, and lines that don't have an equals sign
+      if [ -z "$LINE" ] || [[ "$LINE" =~ ^\\s*# ]] || ! [[ "$LINE" =~ = ]]; then
+        continue
+      fi
+      
+      # Extract the key from the line
+      KEY=$(echo "$LINE" | cut -d= -f1 | xargs)
+      # Extract the value from the line (everything after the first equals sign)
+      VALUE=$(echo "$LINE" | cut -d= -f2- | xargs -0)
+      
+      # Skip DOTENV_PUBLIC_KEY variables
+      if [[ "$KEY" == DOTENV_PUBLIC_KEY* ]]; then
+        continue
+      fi
+      
+      # Check if the value is encrypted
+      if ! [[ "$VALUE" =~ ^\"encrypted: ]]; then
+        echo "ERROR: Unencrypted value found in $ENV_FILE: $KEY"
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+      fi
+    done < "$ENV_FILE"
+  fi
+done
+
+# If any errors were found, abort the commit
+if [ $ERROR_COUNT -gt 0 ]; then
+  echo "$ERROR_COUNT unencrypted values found in .env files!"
+  echo "Please encrypt them with 'npx dotenvx encrypt' before committing."
+  exit 1
+fi
+
+# echo "All environment variables are properly encrypted!"
