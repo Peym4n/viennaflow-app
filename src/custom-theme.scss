@@ -6,15 +6,14 @@
 html {
   @include mat.theme((
     color: (
-      theme-type: dark,
-      primary: mat.$cyan-palette,
-      tertiary: mat.$orange-palette,
+      theme-type: light,
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
     ),
     typography: Roboto,
     density: 0,
   ));
 }
-
 /**
       theme-type: light,
       primary: mat.$azure-palette,

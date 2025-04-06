@@ -1,1 +1,47 @@
-<p>navbar works!</p>
+<mat-toolbar color="primary" class="navbar mat-elevation-z2">
+  <div class="container">
+    <!-- Logo and brand name -->
+    <div class="brand">
+      <a routerLink="/">
+        <div class="logo-container">
+          <!-- Logo placeholder - replace with actual logo image -->
+          <span class="logo">VF</span>
+          <span class="brand-name">ViennaFlow</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Desktop menu -->
+    <div class="nav-links" *ngIf="!(isHandset$ | async)">
+      <button
+        mat-button
+        *ngFor="let item of navItems"
+        [routerLink]="item.route"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{exact: item.route === '/'}"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
+    <!-- Mobile menu with hamburger button -->
+    <button
+      *ngIf="isHandset$ | async"
+      mat-icon-button
+      [matMenuTriggerFor]="menu"
+      aria-label="Toggle navigation menu"
+    >
+      <mat-icon>menu</mat-icon>
+    </button>
+
+    <mat-menu #menu="matMenu" xPosition="before">
+      <button
+        mat-menu-item
+        *ngFor="let item of navItems"
+        (click)="navigateTo(item.route)"
+      >
+        {{ item.label }}
+      </button>
+    </mat-menu>
+  </div>
+</mat-toolbar>
