@@ -1,14 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
+import {createClient} from "@supabase/supabase-js";
 import * as dotenvx from "@dotenvx/dotenvx";
 
 export default async function handler(req, res) {
   // Query-Parameter auslesen
   //example call http://localhost:4200/api/getlines?lineid=1085613576
-  const { lineid } = req.query;
-
-  if (!lineid) {
-    return res.status(400).json({ error: "lineid ist mandatory" });
-  }
+  const {lineid} = req.query;
 
   // Supabase-Client initialisieren
   const supabase = createClient(
@@ -17,15 +13,19 @@ export default async function handler(req, res) {
   );
 
   // Abfrage der Tabelle "steige" mit Filter auf stopid
-  const { data, error } = await supabase
+  let query = supabase
     .from("linien")
     .select("*")
-    .eq("linien_id", lineid)
     .eq("verkehrsmittel", "ptMetro"); // Filter setzen
 
+  if (lineid) {
+    query = query.eq("linien_id", lineid);
+  }
+
+  const {data, error} = await query;
   // Fehlerbehandlung
   if (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({error: error.message});
   }
 
   // Daten als JSON zurückgeben
