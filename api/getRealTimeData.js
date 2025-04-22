@@ -10,9 +10,10 @@ export default async function handler(req, res) {
   }
   console.log("conflict");
   try {
-    const { data } = await axios.get(
+    const { data, error } = await axios.get(
       `https://www.wienerlinien.at/ogd_realtime/monitor?rbl=${rbl}`
     );
+    if (error) throw error;
 
     console.log(data);
 
