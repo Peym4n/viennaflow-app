@@ -20,8 +20,11 @@
 
   <!-- Map Controls -->
   <div class="map-controls">
-    <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()">
+    <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()" class="control-button">
       <mat-icon>my_location</mat-icon>
+    </button>
+    <button mat-fab [color]="showMetroLines ? 'accent' : 'basic'" aria-label="Toggle metro lines" (click)="toggleMetroLines()" class="control-button">
+      <mat-icon>subway</mat-icon>
     </button>
   </div>
 </div>

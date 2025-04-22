@@ -5,7 +5,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { GoogleMapsService } from '../../../../core/services/google-maps.service';
+import { ApiService, LineStopsResponse, MetroLine } from '../../../../core/services/api.service';
 import { environment } from '../../../../../environments/environment';
+import { forkJoin, Observable, of, Subscription } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 // Define an extended environment interface for type safety
 interface ExtendedGoogleMapsConfig {
@@ -33,12 +36,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private map: any = null;
   private userMarker: any = null;
   private watchId: number | null = null;
+  private metroLinePolylines: google.maps.Polyline[] = [];
+  private subscription = new Subscription();
   
   isLoading = true;
   hasLocationError = false;
+  showMetroLines = true;
   
   private snackBar = inject(MatSnackBar);
   private mapsService = inject(GoogleMapsService);
+  private apiService = inject(ApiService);
   
   constructor() {}
   
@@ -83,6 +90,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
     }
+    
+    // Clear polylines
+    this.clearMetroLines();
+    
+    // Unsubscribe from all subscriptions
+    this.subscription.unsubscribe();
   }
   
   private initMap(): void {
@@ -125,6 +138,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       // Add a listener to detect when the map is fully loaded
       window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
         console.log('Map fully loaded and ready');
+        
+        // Load metro lines after map is loaded
+        this.loadMetroLines();
       });
       
       // Get user location
@@ -220,14 +236,88 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   
   recenterMap(): void {
+    // Only recenter if we have the user marker
     if (this.userMarker && this.map) {
-      const position = this.userMarker.getPosition();
-      if (position) {
-        this.map.setCenter(position);
-        this.map.setZoom(16);
-      }
-    } else {
-      this.getUserLocation();
+      this.map.setCenter(this.userMarker.getPosition());
+      this.map.setZoom(15);
     }
+  }
+  
+  /**
+   * Toggles the visibility of metro lines on the map
+   */
+  toggleMetroLines(): void {
+    this.showMetroLines = !this.showMetroLines;
+    
+    // Update visibility of all polylines
+    this.metroLinePolylines.forEach(polyline => {
+      polyline.setVisible(this.showMetroLines);
+    });
+  }
+  
+  /**
+   * Loads metro line data and displays it on the map
+   */
+  private loadMetroLines(): void {
+    // Clear existing lines
+    this.clearMetroLines();
+    
+    // Fetch metro line data
+    const sub = this.apiService.getMetroLineStops().pipe(
+      catchError(error => {
+        console.error('Error fetching metro lines:', error);
+        this.snackBar.open('Failed to load metro lines', 'Close', { duration: 3000 });
+        return of(null);
+      })
+    ).subscribe(response => {
+      if (!response) return;
+      
+      // Draw the metro lines on the map
+      this.drawMetroLines(response);
+    });
+    
+    this.subscription.add(sub);
+  }
+  
+  /**
+   * Draws metro lines on the map using the response data
+   */
+  private drawMetroLines(response: LineStopsResponse): void {
+    // Iterate through each metro line
+    Object.entries(response.lines).forEach(([lineId, line]) => {
+      // Check if the line has LineString data
+      if (line.lineString && line.lineString.coordinates.length > 1) {
+        // Extract coordinates from the LineString
+        const path = line.lineString.coordinates.map(coords => {
+          const [lng, lat] = coords;
+          return { lat, lng };
+        });
+        
+        // Create a polyline for the metro line
+        const polyline = new google.maps.Polyline({
+          path: path,
+          geodesic: true,
+          strokeColor: line.farbe || '#FF0000', // Use the defined color or default to red
+          strokeOpacity: 1.0,
+          strokeWeight: 4,
+          map: this.map,
+          visible: this.showMetroLines
+        });
+        
+        // Store the polyline for later reference
+        this.metroLinePolylines.push(polyline);
+      } else {
+        console.warn(`Line ${lineId} (${line.bezeichnung}) does not have LineString data`);
+      }
+    });
+  }
+  
+  /**
+   * Clears all metro lines from the map
+   */
+  private clearMetroLines(): void {
+    // Remove all polylines from the map
+    this.metroLinePolylines.forEach(polyline => polyline.setMap(null));
+    this.metroLinePolylines = [];
   }
 }
