@@ -28,7 +28,8 @@
             ],
             "styles": [
               "src/custom-theme.scss",
-              "src/styles.css"
+              "src/styles.css",
+              "src/assets/styles/map-info-windows.css"
             ],
             "scripts": []
           },
@@ -91,7 +92,8 @@
             ],
             "styles": [
               "@angular/material/prebuilt-themes/cyan-orange.css",
-              "src/styles.css"
+              "src/styles.css",
+              "src/assets/styles/map-info-windows.css"
             ],
             "scripts": []
           }

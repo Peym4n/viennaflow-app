@@ -85,6 +85,11 @@
   align-items: center;
 }
 
+/* Active toggle button styles */
+.toggle-active {
+  background-color: #00ff1e !important; /* Orange accent color */
+}
+
 /* Mobile adjustments */
 @media (max-width: 599px) {
   .map-controls {

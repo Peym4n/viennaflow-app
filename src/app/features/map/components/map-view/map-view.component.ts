@@ -37,11 +37,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private userMarker: any = null;
   private watchId: number | null = null;
   private metroLinePolylines: google.maps.Polyline[] = [];
+  private stationMarkers: google.maps.Marker[] = [];
+  private activeInfoWindow: google.maps.InfoWindow | null = null;
   private subscription = new Subscription();
   
   isLoading = true;
   hasLocationError = false;
   showMetroLines = true;
+  showStations = true;
   
   private snackBar = inject(MatSnackBar);
   private mapsService = inject(GoogleMapsService);
@@ -91,8 +94,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       navigator.geolocation.clearWatch(this.watchId);
     }
     
-    // Clear polylines
+    // Clear map elements
     this.clearMetroLines();
+    this.clearStationMarkers();
     
     // Unsubscribe from all subscriptions
     this.subscription.unsubscribe();
@@ -236,31 +240,52 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   
   recenterMap(): void {
-    // Only recenter if we have the user marker
-    if (this.userMarker && this.map) {
-      this.map.setCenter(this.userMarker.getPosition());
+    if (!this.map || !this.userMarker) return;
+    
+    const userPosition = this.userMarker.getPosition();
+    if (userPosition) {
+      this.map.setCenter(userPosition);
       this.map.setZoom(15);
     }
   }
   
   /**
-   * Toggles the visibility of metro lines on the map
+   * Toggle visibility of metro lines on the map
    */
   toggleMetroLines(): void {
     this.showMetroLines = !this.showMetroLines;
     
-    // Update visibility of all polylines
+    // Update visibility of all metro line polylines
     this.metroLinePolylines.forEach(polyline => {
       polyline.setVisible(this.showMetroLines);
     });
   }
   
   /**
+   * Toggles the visibility of station markers on the map
+   */
+  toggleStations(): void {
+    this.showStations = !this.showStations;
+    
+    // Update visibility of all station markers
+    this.stationMarkers.forEach(marker => {
+      marker.setVisible(this.showStations);
+    });
+    
+    // If hiding stations, close any open info windows
+    if (!this.showStations && this.activeInfoWindow) {
+      this.activeInfoWindow.close();
+      this.activeInfoWindow = null;
+    }
+  }
+  
+  /**
    * Loads metro line data and displays it on the map
    */
   private loadMetroLines(): void {
-    // Clear existing lines
+    // Clear existing lines and stations
     this.clearMetroLines();
+    this.clearStationMarkers();
     
     // Fetch metro line data
     const sub = this.apiService.getMetroLineStops().pipe(
@@ -274,6 +299,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       
       // Draw the metro lines on the map
       this.drawMetroLines(response);
+      
+      // Add station markers to the map
+      this.addStationMarkers(response);
     });
     
     this.subscription.add(sub);
@@ -319,5 +347,112 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     // Remove all polylines from the map
     this.metroLinePolylines.forEach(polyline => polyline.setMap(null));
     this.metroLinePolylines = [];
+  }
+  
+  /**
+   * Clears all station markers from the map
+   */
+  private clearStationMarkers(): void {
+    // Close any active info window
+    if (this.activeInfoWindow) {
+      this.activeInfoWindow.close();
+      this.activeInfoWindow = null;
+    }
+    
+    // Remove all markers from the map
+    this.stationMarkers.forEach(marker => marker.setMap(null));
+    this.stationMarkers = [];
+  }
+  
+  /**
+   * Adds station markers to the map using the response data
+   */
+  private addStationMarkers(response: LineStopsResponse): void {
+    // Track processed station IDs to avoid duplicates
+    const processedStationIds = new Set<number>();
+    
+    // Process each metro line
+    Object.entries(response.lines).forEach(([lineId, line]) => {
+      // Get line color for the marker
+      const lineColor = line.farbe || '#000000';
+      
+      // Extract all stops with their coordinates
+      const features = line.stops.features;
+      if (!features || features.length === 0) return;
+      
+      // Create a marker for each station
+      features.forEach(feature => {
+        const stationId = feature.properties.haltestellen_id;
+        
+        // Skip if this station has already been processed
+        if (processedStationIds.has(stationId)) return;
+        processedStationIds.add(stationId);
+        
+        // Get station coordinates and name
+        const [lng, lat] = feature.geometry.coordinates;
+        const stationName = feature.properties.name;
+        
+        // Find all lines that serve this station
+        const stationLines = feature.properties.linien_ids
+          .filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
+          .map(id => {
+            const lineObj = response.lines[id];
+            return lineObj ? { id, name: lineObj.bezeichnung, color: lineObj.farbe } : null;
+          })
+          .filter(line => line !== null);
+        
+        // Create marker for the station
+        const marker = new google.maps.Marker({
+          position: { lat, lng },
+          map: this.map,
+          title: stationName,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: '#FFFFFF',
+            fillOpacity: 1,
+            strokeColor: lineColor,
+            strokeWeight: 2
+          },
+          visible: this.showStations
+        });
+        
+        // Create info window content with station name and serving lines
+        // Using global CSS classes from map-info-windows.css
+        const infoContent = `
+          <div class="gm-station-info">
+            <h3>${stationName}</h3>
+            <div class="gm-station-lines">
+              ${stationLines.map(line => `
+                <div class="gm-line-badge" style="background-color: ${line?.color || '#000000'}">
+                  ${line?.name || ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        
+        // Create info window
+        const infoWindow = new google.maps.InfoWindow({
+          content: infoContent,
+          maxWidth: 200
+        });
+        
+        // Add click listener to open info window
+        marker.addListener('click', () => {
+          // Close any previously open info window
+          if (this.activeInfoWindow) {
+            this.activeInfoWindow.close();
+          }
+          
+          // Open new info window
+          infoWindow.open(this.map, marker);
+          this.activeInfoWindow = infoWindow;
+        });
+        
+        // Store the marker for later reference
+        this.stationMarkers.push(marker);
+      });
+    });
   }
 }
