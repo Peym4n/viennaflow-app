@@ -9,7 +9,7 @@ export interface MetroLine {
   reihenfolge: number;
   echtzeit: boolean;
   stops: GeoJsonFeatureCollection;
-  lineString?: GeoJsonLineString;
+  lineStrings: GeoJsonLineString[];
 }
 
 export interface GeoJsonLineString {

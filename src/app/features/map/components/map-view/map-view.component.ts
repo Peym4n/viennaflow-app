@@ -313,29 +313,34 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private drawMetroLines(response: LineStopsResponse): void {
     // Iterate through each metro line
     Object.entries(response.lines).forEach(([lineId, line]) => {
-      // Check if the line has LineString data
-      if (line.lineString && line.lineString.coordinates.length > 1) {
-        // Extract coordinates from the LineString
-        const path = line.lineString.coordinates.map(coords => {
-          const [lng, lat] = coords;
-          return { lat, lng };
+      // Process each LineString in the array for this metro line
+      if (line.lineStrings && line.lineStrings.length > 0) {
+        line.lineStrings.forEach(lineString => {
+          // Make sure this lineString has coordinates
+          if (lineString.coordinates && lineString.coordinates.length > 1) {
+            // Extract coordinates from the LineString
+            const path = lineString.coordinates.map((coords: [number, number]) => {
+              const [lng, lat] = coords;
+              return { lat, lng };
+            });
+            
+            // Create a polyline for this segment of the metro line
+            const polyline = new google.maps.Polyline({
+              path: path,
+              geodesic: true,
+              strokeColor: line.farbe || '#FF0000', // Use the defined color or default to red
+              strokeOpacity: 1.0,
+              strokeWeight: 4,
+              map: this.map,
+              visible: this.showMetroLines
+            });
+            
+            // Store the polyline for later reference
+            this.metroLinePolylines.push(polyline);
+          }
         });
-        
-        // Create a polyline for the metro line
-        const polyline = new google.maps.Polyline({
-          path: path,
-          geodesic: true,
-          strokeColor: line.farbe || '#FF0000', // Use the defined color or default to red
-          strokeOpacity: 1.0,
-          strokeWeight: 4,
-          map: this.map,
-          visible: this.showMetroLines
-        });
-        
-        // Store the polyline for later reference
-        this.metroLinePolylines.push(polyline);
       } else {
-        console.warn(`Line ${lineId} (${line.bezeichnung}) does not have LineString data`);
+        console.warn(`Line ${lineId} (${line.bezeichnung}) does not have valid lineStrings data`);
       }
     });
   }
@@ -401,6 +406,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           })
           .filter(line => line !== null);
         
+        // Determine stroke color based on number of lines
+        // Use black when station has 2 or more lines, otherwise use the line color
+        const strokeColor = stationLines.length >= 2 ? '#000000' : lineColor;
+        
         // Create marker for the station
         const marker = new google.maps.Marker({
           position: { lat, lng },
@@ -411,8 +420,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             scale: 7,
             fillColor: '#FFFFFF',
             fillOpacity: 1,
-            strokeColor: lineColor,
-            strokeWeight: 2
+            strokeColor,
+            strokeWeight: 3
           },
           visible: this.showStations
         });
