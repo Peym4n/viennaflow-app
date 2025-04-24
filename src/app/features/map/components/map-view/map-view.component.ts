@@ -57,6 +57,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.mapsService.loadGoogleMapsApi().subscribe({
       next: () => {
         console.log('Google Maps API loaded successfully');
+        this.setupVisibilityListener();
       },
       error: (error) => {
         console.error('Failed to load Google Maps API:', error);
@@ -157,7 +158,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
   
-  private getUserLocation(): void {
+  private getUserLocation(retry: boolean = true): void {
     if (navigator.geolocation) {
       this.watchId = navigator.geolocation.watchPosition(
         (position) => {
@@ -165,20 +166,33 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           };
-          
           this.updateUserLocation(userLocation);
           this.isLoading = false;
         },
         (error) => {
           console.error('Geolocation error:', error);
+          if (error.code === error.TIMEOUT) {
+            console.warn('Location timeout. Possible causes: tab suspension, poor signal, privacy settings, or short timeout.');
+            // Optionally, show a retry message or indicator here
+            if (retry) {
+              // Retry once with a longer timeout and allow cached positions
+              setTimeout(() => {
+                this.getUserLocation(false);
+              }, 1000); // Wait 1 second before retry
+              return;
+            }
+          }
           this.isLoading = false;
-          this.hasLocationError = true;
+          // Only set hasLocationError for permission denied
+          if (error.code === error.PERMISSION_DENIED) {
+            this.hasLocationError = true;
+          }
           this.showLocationError(error);
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+          timeout: retry ? 10000 : 30000, // 10s first, 30s on retry
+          maximumAge: retry ? 0 : 60000    // No cache first, allow 60s cache on retry
         }
       );
     } else {
@@ -188,6 +202,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         duration: 5000
       });
     }
+  }
+
+  // Listen for tab visibility changes to restart geolocation if needed
+  private setupVisibilityListener(): void {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        // Restart geolocation when returning to the tab
+        if (this.watchId !== null) {
+          navigator.geolocation.clearWatch(this.watchId);
+        }
+        this.getUserLocation();
+      }
+    });
   }
   
   private updateUserLocation(position: {lat: number, lng: number}): void {
@@ -220,23 +247,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   
   private showLocationError(error: GeolocationPositionError): void {
-    let message = 'Unable to get your location.';
-    
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        message = 'Location access was denied. Please enable location services.';
-        break;
-      case error.POSITION_UNAVAILABLE:
-        message = 'Location information is unavailable.';
-        break;
-      case error.TIMEOUT:
-        message = 'The request to get your location timed out.';
-        break;
+    // Only show the 'enable location services' message for PERMISSION_DENIED
+    if (error.code === error.PERMISSION_DENIED) {
+      this.snackBar.open('Location access was denied. Please enable location services.', 'Close', {
+        duration: 5000
+      });
+    } else {
+      // For other errors, log but do not show the message to the user
+      console.warn('Geolocation error:', error);
     }
-    
-    this.snackBar.open(message, 'Close', {
-      duration: 5000
-    });
   }
   
   recenterMap(): void {
