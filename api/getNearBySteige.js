@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import * as dotenvx from "@dotenvx/dotenvx";
 
 export default async function handler(req, res) {
-  //.../api/getNearbySteige?lat=48.2082&lon=16.3738&radius=1000
+  //...
 
   const { lat, lon, radius } = req.query;
   console.log("gettingNearByStations");
