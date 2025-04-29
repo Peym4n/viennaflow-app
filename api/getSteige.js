@@ -4,9 +4,9 @@ import wkx from "wkx";
 
 export default async function handler(req, res) {
   // Query-Parameter auslesen
-  //example call http://localhost:4200/api/getsteige?stopid=1085613576
+  //example call http://localhost:4200/api/getSteige?stopid=1085613576
   const { stopid } = req.query;
-
+  console.log("getSteige");
   if (!stopid) {
     return res.status(400).json({ error: "stopid ist mandatory" });
   }
