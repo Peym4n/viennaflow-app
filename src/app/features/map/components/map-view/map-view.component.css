@@ -74,6 +74,20 @@
   top: 16px;
   right: 16px;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.control-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Active toggle button styles */
+.toggle-active {
+  background-color: #00ff1e !important; /* Orange accent color */
 }
 
 /* Mobile adjustments */

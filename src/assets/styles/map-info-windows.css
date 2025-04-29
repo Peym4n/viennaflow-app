@@ -1,0 +1,71 @@
+/* Styles for metro station info windows */
+.gm-station-info {
+  font-family: 'Roboto', sans-serif;
+  padding: 8px;
+  min-width: 180px;
+  position: relative;
+}
+
+/* Move close button after station name */
+.gm-ui-hover-effect {
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  width: 24px !important;
+  height: 24px !important;
+  z-index: 10;
+}
+
+/* Remove margins from the X button span */
+.gm-ui-hover-effect span {
+  margin: 0 !important;
+}
+
+/* Override Google Maps info window max dimensions */
+.gm-style-iw {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.gm-style-iw-d {
+  max-width: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.gm-style-iw-c {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.gm-style-iw-ch {
+  padding-top: 0 !important;
+}
+
+.gm-station-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 500;
+  padding-right: 20px; /* Make room for close button */
+}
+
+.gm-station-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gm-line-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 16px;
+  min-width: 32px;
+  height: 24px;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 0 2px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+}
