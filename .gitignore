@@ -1,4 +1,4 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# See http://help.github.com/ignore-files/ for more about ignoring files.
 
 # Compiled output
 /dist
@@ -8,6 +8,7 @@
 
 # Node
 /node_modules
+**/node_modules
 npm-debug.log
 yarn-error.log
 
@@ -27,9 +28,6 @@ yarn-error.log
 !.vscode/launch.json
 !.vscode/extensions.json
 .history/*
-
-# windsurf rules
-.windsurfrules
 
 # Miscellaneous
 /.angular/cache

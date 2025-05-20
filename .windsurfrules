@@ -1,0 +1,60 @@
+# ViennaFlow Project Knowledge
+
+## Project Overview
+- Mobile-first application that also works on desktop
+- Implemented as a Progressive Web App (PWA)
+- Uses Angular 19.2.10 with Angular CLI 19.2.3
+- Node.js v22.x required
+- Frontend/backend architecture with Vercel for backend deployment
+- Uses Supabase for database
+
+## Core UI Features
+- Top navbar with logo
+- Responsive design with hamburger menu on mobile
+- Google Maps as the main content area of the application
+
+## Map Features & Data Display
+- Displays public transit lines (e.g., metro lines) on the map.
+- Shows individual transit stations as markers.
+- Standard station markers, when clicked, show basic information (like station name and serving lines) using default map pop-ups (InfoWindows).
+- **"Nearby Points of Interest" (e.g., Steige/Platforms) Functionality:**
+    - Fetches and processes data for nearby transit points of interest (conceptually 'Steige' or platforms) based on the user's current location.
+    - Instead of directly marking all fetched 'Steige', the system identifies their corresponding *main stations* using a linking ID (e.g., `fk_haltestellen_id`).
+    - These main stations are then visually highlighted on the map (e.g., by changing marker color).
+    - Uses **custom HTML overlays** to display detailed information next to these highlighted stations.
+    - The custom overlays for highlighted stations show key identifiers, including the station's primary ID and a specific 'diva' code/identifier.
+    - Ensures that only a single highlight and overlay are shown per unique main station, even if multiple nearby 'Steige' map to it.
+    - Manages the lifecycle of these highlights and overlays: clears previous ones before rendering new ones based on updated data, ensuring this happens after new data is fetched.
+
+## Core Functionality
+- Uses user's current geolocation
+- Displays user location on the map
+- Fetches additional data from Vercel backend API
+
+## Technical Implementation
+- TypeScript 5.7.2 and RxJS 7.8.0
+- Environment configuration using dotenvx for managing API keys
+- Custom environment generation script (scripts/generate-env.js)
+- Google Maps API integration
+- **Custom Map Elements:**
+    - Implements custom HTML map overlays by extending `google.maps.OverlayView` for richer content than standard InfoWindows.
+    - Uses a **factory pattern** for creating these custom overlay classes. This is crucial to correctly manage the dependency on the Google Maps API, ensuring it's loaded before the overlay class (which extends a Maps API class) is defined.
+- **Shared Data Structures:**
+    - Employs shared TypeScript type definitions for data structures exchanged between the frontend and backend (e.g., for station and 'Steig' data) to maintain consistency.
+- **Backend API Details:**
+    - The API (deployed on Vercel) includes specific endpoints to provide data for nearby transit points of interest (e.g., 'Steige'), which in turn queries the Supabase database (potentially via RPC calls).
+
+## Security Approach
+- API keys stored in encrypted .env files using dotenvx
+- Different keys for development, staging, and production
+- Environment variables accessed via dotenvx.get() method
+- Generated environment.ts is git-ignored
+
+## Deployment
+- Uses Vercel for deployment
+- Environment-specific configuration
+
+## Code Comments
+- Write comments in English generally across the project
+- Write comments in German if the file already contains other German comments
+- The getStops.js file contains German comments, so new comments there should also be in German

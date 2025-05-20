@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as dotenvx from '@dotenvx/dotenvx';
 
-// Get directory name in ESM
+// Get directory name
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -13,7 +13,7 @@ if (!fs.existsSync(environmentsDir)) {
   fs.mkdirSync(environmentsDir, { recursive: true });
 }
 
-// Get API keys using dotenvx (same approach as in getSampleData.js)
+// Get API keys using dotenvx for encrypted environment variables
 const googleMapsApiKey = dotenvx.get('GOOGLE_MAPS_API_KEY');
 const googleMapsMapId = dotenvx.get('GOOGLE_MAPS_MAP_ID');
 

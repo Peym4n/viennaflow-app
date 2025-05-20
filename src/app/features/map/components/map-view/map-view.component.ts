@@ -6,9 +6,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { GoogleMapsService } from '../../../../core/services/google-maps.service';
 import { ApiService, LineStopsResponse, MetroLine } from '../../../../core/services/api.service';
+import { LocationService, Coordinates } from '../../../../core/services/location.service';
 import { environment } from '../../../../../environments/environment';
-import { forkJoin, Observable, of, Subscription } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable, of, Subject, Subscription } from 'rxjs';
+import { catchError, map, takeUntil, switchMap } from 'rxjs/operators';
+import { NearbySteig } from '@shared-types/api-models';
+import { createCustomMapOverlayClass, ICustomMapOverlay, CustomMapOverlayConstructor } from './custom-map-overlay';
 
 // Define an extended environment interface for type safety
 interface ExtendedGoogleMapsConfig {
@@ -32,14 +35,17 @@ interface ExtendedGoogleMapsConfig {
 export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('mapContainer') mapContainer!: ElementRef;
   
-  // Using 'any' type temporarily to resolve TypeScript errors
   private map: any = null;
   private userMarker: any = null;
-  private watchId: number | null = null;
   private metroLinePolylines: google.maps.Polyline[] = [];
   private stationMarkers: google.maps.Marker[] = [];
   private activeInfoWindow: google.maps.InfoWindow | null = null;
-  private subscription = new Subscription();
+  private componentDestroyed$ = new Subject<void>();
+  
+  private stationMarkerMap = new Map<number, { marker: google.maps.Marker, diva?: number | string }>();
+  private highlightedStationIds = new Set<number>();
+  private highlightedStationOverlays: ICustomMapOverlay[] = [];
+  private CustomMapOverlayCtor!: CustomMapOverlayConstructor;
   
   isLoading = true;
   hasLocationError = false;
@@ -49,215 +55,223 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private mapsService = inject(GoogleMapsService);
   private apiService = inject(ApiService);
+  private locationService = inject(LocationService);
   
   constructor() {}
   
   ngOnInit(): void {
-    // Initial setup - load the Google Maps API
-    this.mapsService.loadGoogleMapsApi().subscribe({
+    this.mapsService.loadGoogleMapsApi().pipe(
+      takeUntil(this.componentDestroyed$)
+    ).subscribe({
       next: () => {
         console.log('Google Maps API loaded successfully');
-        this.setupVisibilityListener();
       },
       error: (error) => {
         console.error('Failed to load Google Maps API:', error);
-        this.hasLocationError = true;
-        this.isLoading = false;
-        this.snackBar.open('Failed to load maps. Please try again later.', 'Close', {
-          duration: 5000
-        });
+        this.handleMapLoadingError('Failed to load maps. Please try again later.');
       }
     });
   }
   
   ngAfterViewInit(): void {
     console.log('View initialized, map container element:', this.mapContainer?.nativeElement);
-    
-    // Initialize map after view is ready and API is loaded
-    const checkAndInitMap = () => {
-      console.log('Checking if Google Maps API is loaded...');
-      if (this.mapsService.isGoogleMapsLoaded()) {
-        console.log('Google Maps API is loaded, initializing map...');
-        this.initMap();
-      } else {
-        console.log('Google Maps API not loaded yet, checking again in 100ms');
-        // Check again in 100ms
-        setTimeout(checkAndInitMap, 100);
-      }
-    };
-    
-    checkAndInitMap();
+    this.initializeMapWhenReady();
   }
   
   ngOnDestroy(): void {
-    // Clean up resources
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-    }
+    this.componentDestroyed$.next();
+    this.componentDestroyed$.complete();
     
-    // Clear map elements
+    if (this.activeInfoWindow) {
+      this.activeInfoWindow.close();
+      this.activeInfoWindow = null;
+    }
+    this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
+    this.highlightedStationOverlays = [];
+
     this.clearMetroLines();
     this.clearStationMarkers();
-    
-    // Unsubscribe from all subscriptions
-    this.subscription.unsubscribe();
+  }
+  
+  private initializeMapWhenReady(): void {
+    if (this.mapsService.isGoogleMapsLoaded() && window.google && window.google.maps) {
+      console.log('Google Maps API is loaded, initializing map and CustomMapOverlayCtor...');
+      this.CustomMapOverlayCtor = createCustomMapOverlayClass(window.google.maps);
+      this.initMap();
+      this.subscribeToLocationUpdates();
+    } else {
+      console.log('Google Maps API not loaded yet, checking again in 100ms');
+      setTimeout(() => this.initializeMapWhenReady(), 100);
+    }
   }
   
   private initMap(): void {
     console.log('Initializing map...');
-    console.log('Map container dimensions:', {
-      width: this.mapContainer.nativeElement.offsetWidth,
-      height: this.mapContainer.nativeElement.offsetHeight
-    });
-
-    // Default center (Vienna)
     const defaultCenter = { lat: 48.2082, lng: 16.3738 };
-    
     try {
-      // Initialize the map - using window.google to avoid TypeScript errors
-      console.log('Creating Google Map instance...');
-      // Create map configuration options
       const mapOptions: google.maps.MapOptions = {
         center: defaultCenter,
-        zoom: 15,
+        zoom: 13,
         mapTypeControl: false,
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
       };
-      
-      // Get the Google Maps config with proper typing
       const googleMapsConfig = environment.googleMaps as ExtendedGoogleMapsConfig;
-      
-      // Add mapId if available in environment
-      if (googleMapsConfig && typeof googleMapsConfig.mapId === 'string' && googleMapsConfig.mapId.trim() !== '') {
+      if (googleMapsConfig?.mapId) {
         (mapOptions as any).mapId = googleMapsConfig.mapId;
-        console.log('Using Map ID from environment:', googleMapsConfig.mapId);
       }
-      
-      // Create the map instance
       this.map = new window.google.maps.Map(this.mapContainer.nativeElement, mapOptions);
       
-      console.log('Map instance created:', this.map);
-
-      // Add a listener to detect when the map is fully loaded
       window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
         console.log('Map fully loaded and ready');
-        
-        // Load metro lines after map is loaded
         this.loadMetroLines();
       });
-      
-      // Get user location
-      this.getUserLocation();
+      this.isLoading = false;
     } catch (error) {
       console.error('Error initializing map:', error);
-      this.snackBar.open('Error initializing map. Please try again.', 'Close', {
-        duration: 5000
-      });
+      this.handleMapLoadingError('Error initializing map. Please try again.');
     }
   }
   
-  private getUserLocation(retry: boolean = true): void {
-    if (navigator.geolocation) {
-      this.watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const userLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          this.updateUserLocation(userLocation);
-          this.isLoading = false;
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          if (error.code === error.TIMEOUT) {
-            console.warn('Location timeout. Possible causes: tab suspension, poor signal, privacy settings, or short timeout.');
-            // Optionally, show a retry message or indicator here
-            if (retry) {
-              // Retry once with a longer timeout and allow cached positions
-              setTimeout(() => {
-                this.getUserLocation(false);
-              }, 1000); // Wait 1 second before retry
-              return;
-            }
-          }
-          this.isLoading = false;
-          // Only set hasLocationError for permission denied
-          if (error.code === error.PERMISSION_DENIED) {
-            this.hasLocationError = true;
-          }
-          this.showLocationError(error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: retry ? 10000 : 30000, // 10s first, 30s on retry
-          maximumAge: retry ? 0 : 60000    // No cache first, allow 60s cache on retry
-        }
-      );
-    } else {
-      this.isLoading = false;
-      this.hasLocationError = true;
-      this.snackBar.open('Geolocation is not supported by this browser.', 'Close', {
-        duration: 5000
-      });
-    }
+  private handleMapLoadingError(message: string): void {
+    this.hasLocationError = true;
+    this.isLoading = false;
+    this.snackBar.open(message, 'Close', { duration: 5000 });
   }
 
-  // Listen for tab visibility changes to restart geolocation if needed
-  private setupVisibilityListener(): void {
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        // Restart geolocation when returning to the tab
-        if (this.watchId !== null) {
-          navigator.geolocation.clearWatch(this.watchId);
+  private subscribeToLocationUpdates(): void {
+    this.locationService.currentLocation$.pipe(
+      takeUntil(this.componentDestroyed$),
+      switchMap((coordinates: Coordinates | null) => {
+        if (!coordinates) {
+          console.warn('MapViewComponent received null coordinates from LocationService.');
+          this.hasLocationError = true;
+          this.isLoading = false;
+          return of(null);
         }
-        this.getUserLocation();
+        console.log('MapViewComponent received location:', coordinates);
+        this.hasLocationError = false;
+        this.isLoading = false; 
+
+        const userLatLng = new google.maps.LatLng(coordinates.latitude, coordinates.longitude);
+        if (!this.userMarker) {
+          this.userMarker = new google.maps.Marker({
+            position: userLatLng,
+            map: this.map,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: '#4285F4',
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 2,
+            },
+            title: 'Your Location'
+          });
+          this.map.setCenter(userLatLng);
+          this.map.setZoom(15);
+        } else {
+          this.userMarker.setPosition(userLatLng);
+        }
+        return this.fetchAndDisplayNearbySteige(coordinates);
+      })
+    ).subscribe({
+      next: () => {
+        console.log('Nearby Steige processing logic completed (or skipped if no coords).');
+      },
+      error: (error: any) => {
+        console.error('MapViewComponent error during location update or Steige fetching:', error);
+        this.hasLocationError = true;
+        this.isLoading = false;
+        const message = error?.message || 'Could not process location or fetch data.';
+        this.snackBar.open(`Error: ${message}`, 'Close', { duration: 5000 });
       }
     });
   }
   
-  private updateUserLocation(position: {lat: number, lng: number}): void {
-    if (!this.map) return;
+  private fetchAndDisplayNearbySteige(coordinates: Coordinates): Observable<void> {
+    console.log('[MapView] Fetching nearby Steige for highlighting and overlay display:', coordinates);
+
+    return this.apiService.getNearbySteige(coordinates.latitude, coordinates.longitude, 800).pipe(
+      takeUntil(this.componentDestroyed$),
+      map((steige: NearbySteig[]) => {
+        console.log('[MapView] Received nearby Steige for overlay processing. Count:', steige.length);
+        if (!this.map) {
+            console.warn('[MapView] Map not available for displaying Steige-based highlights/overlays.');
+            return; 
+        }
+
+        // Clear existing highlights and overlays now that we have new data
+        this.highlightedStationIds.forEach(stationId => {
+          const stationData = this.stationMarkerMap.get(stationId);
+          const marker = stationData ? stationData.marker : undefined;
+          if (marker) {
+            const currentIcon = marker.getIcon() as google.maps.Symbol;
+            if (currentIcon && typeof currentIcon === 'object') {
+              marker.setIcon({...currentIcon, fillColor: '#FFFFFF'});
+            }
+          }
+        });
+        this.highlightedStationIds.clear();
     
-    // Update user marker
-    if (!this.userMarker) {
-      // Create a new marker if it doesn't exist
-      this.userMarker = new window.google.maps.Marker({
-        position,
-        map: this.map,
-        title: 'Your location',
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: '#4285F4',
-          fillOpacity: 1,
-          strokeColor: 'white',
-          strokeWeight: 2
-        },
-        optimized: true
-      });
-      
-      // Center map on first location acquisition
-      this.map.setCenter(position);
-    } else {
-      // Update existing marker position
-      this.userMarker.setPosition(position);
-    }
+        console.log('[MapView] Clearing old highlightedStationOverlays. Count:', this.highlightedStationOverlays.length);
+        this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
+        this.highlightedStationOverlays = [];
+        // End of clearing block
+
+        const uniqueHaltestellenIds = new Set<number>();
+        steige.forEach(s => {
+          if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number') { 
+            uniqueHaltestellenIds.add(s.fk_haltestellen_id);
+          } else if (s.fk_haltestellen_id) {
+            console.warn(`[MapView] A Steig entry has non-number fk_haltestellen_id: ${s.fk_haltestellen_id}`);
+          }
+        });
+
+        console.log('[MapView] Unique Haltestellen IDs to highlight and overlay:', Array.from(uniqueHaltestellenIds));
+
+        uniqueHaltestellenIds.forEach(stationIdToHighlight => {
+          const stationData = this.stationMarkerMap.get(stationIdToHighlight);
+          const stationMarker = stationData ? stationData.marker : undefined;
+          const divaValue = stationData ? stationData.diva : undefined;
+
+          if (stationMarker) {
+            const currentIcon = stationMarker.getIcon() as google.maps.Symbol;
+            if (currentIcon && typeof currentIcon === 'object') {
+                stationMarker.setIcon({...currentIcon, fillColor: 'red'});
+                this.highlightedStationIds.add(stationIdToHighlight);
+
+                if (this.CustomMapOverlayCtor && stationMarker.getPosition()) {
+                  const overlayContent = `<div style="font-size: 10px; padding: 2px;">ID: ${stationIdToHighlight}<br>Diva: ${divaValue !== undefined ? divaValue : 'N/A'}</div>`;
+                  const position = stationMarker.getPosition()!;
+                  try {
+                    const overlay = new this.CustomMapOverlayCtor(position, overlayContent);
+                    overlay.setMap(this.map);
+                    this.highlightedStationOverlays.push(overlay);
+                  } catch (e) {
+                    console.error('[MapView] Error creating CustomMapOverlay:', e);
+                  }
+                } else {
+                  if (!this.CustomMapOverlayCtor) console.warn('[MapView] CustomMapOverlayCtor not initialized, cannot create overlay.');
+                  if (!stationMarker.getPosition()) console.warn('[MapView] Station marker has no position for overlay, station ID:', stationIdToHighlight);
+                }
+            } else {
+                console.warn(`[MapView] Could not get icon object for station ID: ${stationIdToHighlight} to highlight.`);
+            }
+          } else {
+            console.warn(`[MapView] No station marker found for ID: ${stationIdToHighlight} to highlight or create overlay.`);
+          }
+        });
+      }),
+      catchError((error: any) => {
+        console.error('[MapView] Error fetching or processing Steige for highlighting/overlays:', error);
+        this.snackBar.open('Could not load nearby stop highlights/overlays.', 'Close', { duration: 3000 });
+        return of(undefined); // Return an observable to keep the stream alive
+      })
+    );
   }
-  
-  private showLocationError(error: GeolocationPositionError): void {
-    // Only show the 'enable location services' message for PERMISSION_DENIED
-    if (error.code === error.PERMISSION_DENIED) {
-      this.snackBar.open('Location access was denied. Please enable location services.', 'Close', {
-        duration: 5000
-      });
-    } else {
-      // For other errors, log but do not show the message to the user
-      console.warn('Geolocation error:', error);
-    }
-  }
-  
+
   recenterMap(): void {
     if (!this.map || !this.userMarker) return;
     
@@ -268,45 +282,28 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
   
-  /**
-   * Toggle visibility of metro lines on the map
-   */
   toggleMetroLines(): void {
     this.showMetroLines = !this.showMetroLines;
-    
-    // Update visibility of all metro line polylines
     this.metroLinePolylines.forEach(polyline => {
       polyline.setVisible(this.showMetroLines);
     });
   }
   
-  /**
-   * Toggles the visibility of station markers on the map
-   */
   toggleStations(): void {
     this.showStations = !this.showStations;
-    
-    // Update visibility of all station markers
     this.stationMarkers.forEach(marker => {
       marker.setVisible(this.showStations);
     });
-    
-    // If hiding stations, close any open info windows
     if (!this.showStations && this.activeInfoWindow) {
       this.activeInfoWindow.close();
       this.activeInfoWindow = null;
     }
   }
   
-  /**
-   * Loads metro line data and displays it on the map
-   */
   private loadMetroLines(): void {
-    // Clear existing lines and stations
     this.clearMetroLines();
-    this.clearStationMarkers();
+    this.clearStationMarkers(); 
     
-    // Fetch metro line data
     const sub = this.apiService.getMetroLineStops().pipe(
       catchError(error => {
         console.error('Error fetching metro lines:', error);
@@ -315,46 +312,29 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       })
     ).subscribe(response => {
       if (!response) return;
-      
-      // Draw the metro lines on the map
       this.drawMetroLines(response);
-      
-      // Add station markers to the map
       this.addStationMarkers(response);
     });
-    
-    this.subscription.add(sub);
   }
   
-  /**
-   * Draws metro lines on the map using the response data
-   */
   private drawMetroLines(response: LineStopsResponse): void {
-    // Iterate through each metro line
     Object.entries(response.lines).forEach(([lineId, line]) => {
-      // Process each LineString in the array for this metro line
       if (line.lineStrings && line.lineStrings.length > 0) {
         line.lineStrings.forEach(lineString => {
-          // Make sure this lineString has coordinates
           if (lineString.coordinates && lineString.coordinates.length > 1) {
-            // Extract coordinates from the LineString
             const path = lineString.coordinates.map((coords: [number, number]) => {
               const [lng, lat] = coords;
               return { lat, lng };
             });
-            
-            // Create a polyline for this segment of the metro line
             const polyline = new google.maps.Polyline({
               path: path,
               geodesic: true,
-              strokeColor: line.farbe || '#FF0000', // Use the defined color or default to red
+              strokeColor: line.farbe || '#FF0000',
               strokeOpacity: 1.0,
               strokeWeight: 4,
               map: this.map,
               visible: this.showMetroLines
             });
-            
-            // Store the polyline for later reference
             this.metroLinePolylines.push(polyline);
           }
         });
@@ -364,72 +344,48 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
   
-  /**
-   * Clears all metro lines from the map
-   */
   private clearMetroLines(): void {
-    // Remove all polylines from the map
     this.metroLinePolylines.forEach(polyline => polyline.setMap(null));
     this.metroLinePolylines = [];
   }
   
-  /**
-   * Clears all station markers from the map
-   */
   private clearStationMarkers(): void {
-    // Close any active info window
     if (this.activeInfoWindow) {
       this.activeInfoWindow.close();
       this.activeInfoWindow = null;
     }
-    
-    // Remove all markers from the map
     this.stationMarkers.forEach(marker => marker.setMap(null));
     this.stationMarkers = [];
+    this.stationMarkerMap.clear();
+    this.highlightedStationIds.clear();
   }
   
-  /**
-   * Adds station markers to the map using the response data
-   */
   private addStationMarkers(response: LineStopsResponse): void {
-    // Track processed station IDs to avoid duplicates
     const processedStationIds = new Set<number>();
-    
-    // Process each metro line
     Object.entries(response.lines).forEach(([lineId, line]) => {
-      // Get line color for the marker
       const lineColor = line.farbe || '#000000';
-      
-      // Extract all stops with their coordinates
       const features = line.stops.features;
       if (!features || features.length === 0) return;
       
-      // Create a marker for each station
       features.forEach(feature => {
         const stationId = feature.properties.haltestellen_id;
-        
-        // Skip if this station has already been processed
         if (processedStationIds.has(stationId)) return;
         processedStationIds.add(stationId);
         
-        // Get station coordinates and name
         const [lng, lat] = feature.geometry.coordinates;
         const stationName = feature.properties.name;
+        const diva = feature.properties.diva;
         
-        // Find all lines that serve this station
         const stationLines = feature.properties.linien_ids
-          .filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
+          .filter((id, index, self) => self.indexOf(id) === index)
           .map(id => {
             const lineObj = response.lines[id];
             return lineObj ? { id, name: lineObj.bezeichnung, color: lineObj.farbe } : null;
           })
-          .filter(line => line !== null);
+          .filter(lineInfo => lineInfo !== null) as { id: string; name: string; color: string | undefined }[];
         
-        // Determine stroke color based on number of lines
-        // Use black when station has 2 or more lines, otherwise use the line color
         const strokeColor = stationLines.length >= 2 ? '#000000' : lineColor;
         
-        // Create marker for the station
         const marker = new google.maps.Marker({
           position: { lat, lng },
           map: this.map,
@@ -445,42 +401,36 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           visible: this.showStations
         });
         
-        // Create info window content with station name and serving lines
-        // Using global CSS classes from map-info-windows.css
         const infoContent = `
           <div class="gm-station-info">
             <h3>${stationName}</h3>
             <div class="gm-station-lines">
-              ${stationLines.map(line => `
-                <div class="gm-line-badge" style="background-color: ${line?.color || '#000000'}">
-                  ${line?.name || ''}
+              ${stationLines.map(lineInfo => `
+                <div class="gm-line-badge" style="background-color: ${lineInfo.color || '#000000'}">
+                  ${lineInfo.name || ''}
                 </div>
               `).join('')}
             </div>
           </div>
         `;
         
-        // Create info window
         const infoWindow = new google.maps.InfoWindow({
           content: infoContent,
           maxWidth: 200
         });
         
-        // Add click listener to open info window
         marker.addListener('click', () => {
-          // Close any previously open info window
           if (this.activeInfoWindow) {
             this.activeInfoWindow.close();
           }
-          
-          // Open new info window
           infoWindow.open(this.map, marker);
           this.activeInfoWindow = infoWindow;
         });
         
-        // Store the marker for later reference
         this.stationMarkers.push(marker);
+        this.stationMarkerMap.set(stationId, { marker, diva });
       });
     });
   }
 }
+

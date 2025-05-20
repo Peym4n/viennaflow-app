@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "cleanUrls": true,
   "builds": [
     {
       "src": "package.json",
@@ -10,14 +11,18 @@
       }
     },
     {
-      "src": "api/**/*.js",
+      "src": "api/**/*.ts",
       "use": "@vercel/node"
     }
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*.js"
+      "source": "/api/:path((?!.*\\.).[^/]+)", 
+      "destination": "/api/:path.ts"
+    },
+    {
+      "source": "/api/(.*)", 
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",

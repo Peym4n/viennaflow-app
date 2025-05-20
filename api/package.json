@@ -1,7 +1,18 @@
 {
-  "name": "api",
+  "name": "viennaflow-api",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
-    "@dotenvx/dotenvx": "^1.39.0",
-    "@supabase/supabase-js": "^2.49.1"
+    "@dotenvx/dotenvx": "^1.44.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/node-fetch": "^2.6.11",
+    "typescript": "^5.4.2"
   }
-}
+} 
