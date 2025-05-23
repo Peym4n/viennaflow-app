@@ -1,7 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core'; // Added NgZone
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { NearbySteig } from '@shared-types/api-models';
+import { Observable, of } from 'rxjs';
+import { NearbySteig, MonitorApiResponse } from '@shared-types/api-models';
 
 // Type definitions for the API responses
 export interface MetroLine {
@@ -49,7 +49,7 @@ export interface LineStopsResponse {
   providedIn: 'root'
 })
 export class ApiService {
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private ngZone: NgZone) {} // Injected NgZone
 
   /**
    * Fetches metro line stops data from the API
@@ -100,5 +100,30 @@ export class ApiService {
     }
 
     return this.http.get<NearbySteig[]>('/api/getNearbySteige', { params });
+  }
+
+  /**
+   * Fetches real-time departure data from the Wiener Linien OGD API.
+   * @param divaValues An array of DIVA numbers for the stations.
+   * @returns Observable that emits real-time monitor data via SSE.
+   */
+  // Changed from SSE to a single HTTP GET request for polling by the client
+  getRealTimeDepartures(divaValues: (string | number)[]): Observable<MonitorApiResponse> {
+    if (!divaValues || divaValues.length === 0) {
+      // Return an Observable of a valid MonitorApiResponse with empty monitors
+      return of({ 
+        data: { monitors: [] }, 
+        message: { value: "No DIVA values provided for monitoring.", messageCode: 0, serverTime: new Date().toISOString()} 
+      } as MonitorApiResponse);
+    }
+
+    let params = new HttpParams();
+    divaValues.forEach(diva => {
+      // HttpParams automatically handles URL encoding for parameter values
+      params = params.append('diva', diva.toString());
+    });
+
+    // The backend endpoint remains the same, but now serves a single JSON response
+    return this.http.get<MonitorApiResponse>('/api/getWienerLinienMonitor', { params });
   }
 }

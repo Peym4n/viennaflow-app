@@ -8,9 +8,9 @@ import { GoogleMapsService } from '../../../../core/services/google-maps.service
 import { ApiService, LineStopsResponse, MetroLine } from '../../../../core/services/api.service';
 import { LocationService, Coordinates } from '../../../../core/services/location.service';
 import { environment } from '../../../../../environments/environment';
-import { Observable, of, Subject, Subscription } from 'rxjs';
-import { catchError, map, takeUntil, switchMap } from 'rxjs/operators';
-import { NearbySteig } from '@shared-types/api-models';
+import { Observable, of, Subject, Subscription, forkJoin, timer } from 'rxjs'; // Added forkJoin, timer
+import { catchError, map, takeUntil, switchMap, tap, mapTo, exhaustMap } from 'rxjs/operators'; // Added tap, mapTo, exhaustMap
+import { NearbySteig, MonitorApiResponse, MonitorLine as RealTimeMonitorLine, Monitor } from '@shared-types/api-models'; // Added MonitorApiResponse and RealTimeMonitorLine
 import { createCustomMapOverlayClass, ICustomMapOverlay, CustomMapOverlayConstructor } from './custom-map-overlay';
 
 // Define an extended environment interface for type safety
@@ -46,7 +46,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private highlightedStationIds = new Set<number>();
   private highlightedStationOverlays: ICustomMapOverlay[] = [];
   private CustomMapOverlayCtor!: CustomMapOverlayConstructor;
-  
+  private lineStopsData: LineStopsResponse | null = null; // To store line data for filtering
+
+  // For Polling
+  private pollingSubscription?: Subscription;
+  private activeDivaMapForPolling = new Map<number, string | number>(); // Stores current DIVAs for polling
+  private currentPollingDivasKey: string = ''; // Stringified key of current DIVAs for polling
+  private readonly pollingIntervalMs = 15000; // 15 seconds
+  private stopPolling$ = new Subject<void>();
+  private lastMonitorResponse: MonitorApiResponse | null = null; // Store last successful response
+
   isLoading = true;
   hasLocationError = false;
   showMetroLines = true;
@@ -88,6 +97,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
     this.highlightedStationOverlays = [];
+
+    this.stopPolling$.next();
+    this.stopPolling$.complete();
+    if (this.pollingSubscription) { // Changed from realTimeSubscription
+      this.pollingSubscription.unsubscribe();
+    }
 
     this.clearMetroLines();
     this.clearStationMarkers();
@@ -195,82 +210,251 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     return this.apiService.getNearbySteige(coordinates.latitude, coordinates.longitude, 800).pipe(
       takeUntil(this.componentDestroyed$),
-      map((steige: NearbySteig[]) => {
+      tap((steige: NearbySteig[]) => { // Changed to tap
         console.log('[MapView] Received nearby Steige for overlay processing. Count:', steige.length);
         if (!this.map) {
             console.warn('[MapView] Map not available for displaying Steige-based highlights/overlays.');
-            return; 
+            return; // tap callbacks don't affect the stream's values by their return
         }
 
-        // Clear existing highlights and overlays now that we have new data
-        this.highlightedStationIds.forEach(stationId => {
-          const stationData = this.stationMarkerMap.get(stationId);
-          const marker = stationData ? stationData.marker : undefined;
-          if (marker) {
-            const currentIcon = marker.getIcon() as google.maps.Symbol;
-            if (currentIcon && typeof currentIcon === 'object') {
-              marker.setIcon({...currentIcon, fillColor: '#FFFFFF'});
-            }
-          }
-        });
-        this.highlightedStationIds.clear();
-    
-        console.log('[MapView] Clearing old highlightedStationOverlays. Count:', this.highlightedStationOverlays.length);
-        this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
-        this.highlightedStationOverlays = [];
-        // End of clearing block
+        // Do NOT clear highlights and overlays here.
+        // setupRealTimeUpdates will manage their lifecycle based on actual changes
+        // to the set of monitored DIVA stations.
 
-        const uniqueHaltestellenIds = new Set<number>();
+        const uniqueHaltestellenDivaMap = new Map<number, string | number>();
         steige.forEach(s => {
-          if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number') { 
-            uniqueHaltestellenIds.add(s.fk_haltestellen_id);
-          } else if (s.fk_haltestellen_id) {
-            console.warn(`[MapView] A Steig entry has non-number fk_haltestellen_id: ${s.fk_haltestellen_id}`);
-          }
-        });
-
-        console.log('[MapView] Unique Haltestellen IDs to highlight and overlay:', Array.from(uniqueHaltestellenIds));
-
-        uniqueHaltestellenIds.forEach(stationIdToHighlight => {
-          const stationData = this.stationMarkerMap.get(stationIdToHighlight);
-          const stationMarker = stationData ? stationData.marker : undefined;
-          const divaValue = stationData ? stationData.diva : undefined;
-
-          if (stationMarker) {
-            const currentIcon = stationMarker.getIcon() as google.maps.Symbol;
-            if (currentIcon && typeof currentIcon === 'object') {
-                stationMarker.setIcon({...currentIcon, fillColor: 'red'});
-                this.highlightedStationIds.add(stationIdToHighlight);
-
-                if (this.CustomMapOverlayCtor && stationMarker.getPosition()) {
-                  const overlayContent = `<div style="font-size: 10px; padding: 2px;">ID: ${stationIdToHighlight}<br>Diva: ${divaValue !== undefined ? divaValue : 'N/A'}</div>`;
-                  const position = stationMarker.getPosition()!;
-                  try {
-                    const overlay = new this.CustomMapOverlayCtor(position, overlayContent);
-                    overlay.setMap(this.map);
-                    this.highlightedStationOverlays.push(overlay);
-                  } catch (e) {
-                    console.error('[MapView] Error creating CustomMapOverlay:', e);
-                  }
-                } else {
-                  if (!this.CustomMapOverlayCtor) console.warn('[MapView] CustomMapOverlayCtor not initialized, cannot create overlay.');
-                  if (!stationMarker.getPosition()) console.warn('[MapView] Station marker has no position for overlay, station ID:', stationIdToHighlight);
-                }
-            } else {
-                console.warn(`[MapView] Could not get icon object for station ID: ${stationIdToHighlight} to highlight.`);
+          if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number') {
+            const stationData = this.stationMarkerMap.get(s.fk_haltestellen_id);
+            if (stationData?.diva && !uniqueHaltestellenDivaMap.has(s.fk_haltestellen_id)) {
+              uniqueHaltestellenDivaMap.set(s.fk_haltestellen_id, stationData.diva);
             }
-          } else {
-            console.warn(`[MapView] No station marker found for ID: ${stationIdToHighlight} to highlight or create overlay.`);
           }
         });
-      }),
-      catchError((error: any) => {
-        console.error('[MapView] Error fetching or processing Steige for highlighting/overlays:', error);
-        this.snackBar.open('Could not load nearby stop highlights/overlays.', 'Close', { duration: 3000 });
-        return of(undefined); // Return an observable to keep the stream alive
+
+        const divaValuesToFetch = Array.from(uniqueHaltestellenDivaMap.values());
+        console.log('[MapView] Unique DIVA values for real-time fetch:', divaValuesToFetch);
+
+        // This part is now handled by updateMonitoredStationsAndPoll
+        this.updateMonitoredStationsAndPoll(uniqueHaltestellenDivaMap);
+        // No explicit return needed here to influence stream value
+      }), 
+      mapTo(undefined), // Changed to mapTo(undefined)
+      catchError((error: any) => { // This catchError is for getNearbySteige
+        console.error('[MapView] Error fetching Steige for polling setup:', error);
+        this.snackBar.open('Could not load nearby stop data for polling.', 'Close', { duration: 3000 });
+        this.clearHighlightsAndOverlays(); // Clear any potential stale state
+        if (this.pollingSubscription) { 
+          this.pollingSubscription.unsubscribe();
+        }
+        this.currentPollingDivasKey = ''; // Reset polling key
+        this.activeDivaMapForPolling.clear();
+        return of(undefined); 
       })
     );
   }
+
+  private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>): void {
+    const newDivaValues = Array.from(divaMapToUpdate.values());
+    const newPollingKey = newDivaValues.sort().join(',');
+
+    if (this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
+      console.log('[MapView] Monitored DIVAs unchanged, polling continues for key:', newPollingKey);
+      // If overlays were somehow cleared, ensure they are redrawn with current understanding
+      // This might happen if another part of the code calls clearHighlightsAndOverlays
+      // For now, assume they persist if DIVAs are unchanged.
+      // If they are not empty, and key is same, the existing poll will continue to update them.
+      return;
+    }
+    
+    // Stop any existing polling if DIVAs change or become empty
+    if (this.pollingSubscription) {
+      this.pollingSubscription.unsubscribe();
+      console.log('[MapView] Stopped previous polling due to DIVA set change or becoming empty.');
+    }
+    
+    this.currentPollingDivasKey = newPollingKey;
+    this.activeDivaMapForPolling = new Map(divaMapToUpdate);
+
+    if (newDivaValues.length === 0) {
+      console.log('[MapView] No DIVAs to monitor. Clearing overlays and stopping poll.');
+      this.clearHighlightsAndOverlays();
+      return;
+    }
+
+    console.log(`[MapView] Starting new polling cycle for DIVAs: ${newDivaValues.join(', ')}`);
+
+    // Initial display before first poll fetch
+    this.clearHighlightsAndOverlays();
+    this.createOverlaysForStations(this.activeDivaMapForPolling, null); // Show "Loading..."
+
+    // Changed from timer(0, this.pollingIntervalMs) to timer(0) for a single fetch
+    this.pollingSubscription = timer(0, this.pollingIntervalMs).pipe( 
+      takeUntil(this.stopPolling$),
+      exhaustMap(() => { // Iteration count is not strictly needed for a single fetch
+        console.log(`[MapView] Single Fetch: Fetching monitor data for DIVAs:`, newDivaValues);
+
+        // For a single fetch, the initial "Loading..." (set before this pipe) is usually sufficient.
+        // The subscribe block will handle replacing it with data or an error message.
+        // The 'if (iteration > 0 && !this.lastMonitorResponse)' logic is primarily for polling scenarios.
+
+        return this.apiService.getRealTimeDepartures(newDivaValues).pipe(
+          catchError((err: any) => {
+            console.error('[MapView] Error fetching monitor data (single fetch):', err);
+            this.clearHighlightsAndOverlays();
+            this.createOverlaysForStations(this.activeDivaMapForPolling, { errorOccurred: true } as any);
+            this.lastMonitorResponse = null; // Clear last response on error
+            return of(null); // Prevent error from stopping the timer
+          })
+        );
+      })
+    ).subscribe((monitorResponse: MonitorApiResponse | null) => {
+      if (monitorResponse && !(monitorResponse as any).errorOccurred) {
+        console.log('[MapView] Single Fetch: Received monitor data:', monitorResponse);
+        this.clearHighlightsAndOverlays(); // Clear "Loading..." or stale data
+        this.createOverlaysForStations(this.activeDivaMapForPolling, monitorResponse);
+        this.lastMonitorResponse = monitorResponse; // Store successful response
+      } else if (!monitorResponse) {
+        // Error was handled in catchError, overlays might show error state or be cleared.
+        // lastMonitorResponse was set to null in catchError.
+        console.log('[MapView] Single Fetch: Error occurred or no data.');
+      }
+      // If (monitorResponse as any).errorOccurred, overlays are already set to error state by catchError
+      // and lastMonitorResponse is null.
+    });
+  }
+
+  private clearHighlightsAndOverlays(): void {
+    this.highlightedStationIds.forEach(stationId => {
+      const stationData = this.stationMarkerMap.get(stationId);
+      const marker = stationData?.marker;
+      if (marker) {
+        const currentIcon = marker.getIcon() as google.maps.Symbol;
+        if (currentIcon && typeof currentIcon === 'object') {
+          marker.setIcon({ ...currentIcon, fillColor: '#FFFFFF' }); // Reset color
+        }
+      }
+    });
+    this.highlightedStationIds.clear();
+
+    console.log('[MapView] Clearing old highlightedStationOverlays. Count:', this.highlightedStationOverlays.length);
+    this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
+    this.highlightedStationOverlays = [];
+  }
+
+  private createOverlaysForStations(
+    stationDivaMap: Map<number, string | number>, 
+    monitorResponse: MonitorApiResponse | null
+  ): void {
+    const validLineBezeichnungen = new Set<string>();
+    if (this.lineStopsData) {
+      Object.values(this.lineStopsData.lines).forEach(line => {
+        validLineBezeichnungen.add(line.bezeichnung);
+      });
+    }
+    console.log('[MapView] Valid line Bezeichnungen for filtering departures:', Array.from(validLineBezeichnungen));
+
+    stationDivaMap.forEach((divaValue, stationIdToHighlight) => {
+      const stationData = this.stationMarkerMap.get(stationIdToHighlight);
+      const stationMarker = stationData?.marker;
+
+      if (stationMarker) {
+        const currentIcon = stationMarker.getIcon() as google.maps.Symbol;
+        if (currentIcon && typeof currentIcon === 'object') {
+          stationMarker.setIcon({ ...currentIcon, fillColor: 'red' }); // Highlight marker
+          this.highlightedStationIds.add(stationIdToHighlight);
+
+          let realTimeHtml = '';
+          // Check for our custom errorOccurred flag first
+          if (monitorResponse && (monitorResponse as any).errorOccurred) {
+            realTimeHtml = `<div class="status-message">Error loading real-time data.</div>`;
+          } else if (monitorResponse === null || monitorResponse === undefined) {
+            realTimeHtml = `<div class="loading-message">Loading real-time data...</div>`;
+          } else if (monitorResponse.data?.monitors && Array.isArray(monitorResponse.data.monitors)) {
+            const stationMonitor = monitorResponse.data.monitors.find(
+              (m: Monitor) => m.locationStop.properties.name === String(divaValue) || 
+                   (m.locationStop.properties.attributes && m.locationStop.properties.attributes.rbl === Number(divaValue))
+            );
+
+            if (stationMonitor) {
+              const departuresHtmlParts: string[] = [];
+              if (stationMonitor.lines && Array.isArray(stationMonitor.lines)) {
+                stationMonitor.lines.forEach((line: RealTimeMonitorLine) => {
+                  if (validLineBezeichnungen.has(line.name) && line.departures?.departure?.length > 0) {
+                    const firstDeparture = line.departures.departure[0];
+                    if (firstDeparture?.departureTime) {
+                      let lineColor = '#808080'; // Default gray color if not found
+                      if (this.lineStopsData && this.lineStopsData.lines) {
+                        const metroLineDetails = Object.values(this.lineStopsData.lines).find(
+                          (metroLine: MetroLine) => metroLine.bezeichnung === line.name
+                        );
+                        if (metroLineDetails && metroLineDetails.farbe) {
+                          lineColor = metroLineDetails.farbe;
+                        }
+                      }
+                      // Apply the class and only keep dynamic background-color inline
+                      const lineNameHtml = `<div class="gm-line-badge" style="background-color: ${lineColor};">${line.name}</div>`;
+                      
+                      let countdownHtml: string;
+                      if (firstDeparture.departureTime.countdown <= 0) {
+                        countdownHtml = `<span class="line-countdown-now"><span class="pulsing-dot"></span></span>`;
+                      } else {
+                        countdownHtml = `<span class="line-countdown">${firstDeparture.departureTime.countdown}'</span>`;
+                      }
+                      
+                      departuresHtmlParts.push(
+                        `<div class="departure-line">` +
+                          lineNameHtml + // Use the styled pill
+                          ` <span class="material-icons line-direction-arrow-icon">chevron_right</span> ` +
+                          `<span class="line-direction">${line.towards}</span>: ` +
+                          countdownHtml + // Use the conditional countdown HTML
+                        `</div>`
+                      );
+                    }
+                  }
+                });
+              }
+              if (departuresHtmlParts.length > 0) {
+                realTimeHtml = departuresHtmlParts.join('');
+              } else {
+                realTimeHtml = `<div class="status-message">No current departures matching filters.</div>`;
+              }
+            } else {
+               realTimeHtml = `<div class="status-message">Real-time data not available for this station.</div>`;
+            }
+          } else {
+            // monitorResponse is not null, but data.monitors is not as expected, or other structure issue
+            realTimeHtml = `<div class="status-message">Real-time data format error or empty response.</div>`;
+          }
+
+          if (this.CustomMapOverlayCtor && stationMarker.getPosition()) {
+            const stationName = stationMarker.getTitle() || 'Unknown Station';
+            const overlayContent = `
+              <div class="custom-map-overlay">
+                <div class="station-info">
+                  <div><span class="label">Station:</span> ${stationName}</div>
+                  <div><span class="label">Diva:</span> ${divaValue !== undefined ? divaValue : 'N/A'}</div>
+                  <!-- Optionally, to keep ID for reference, uncomment below: -->
+                  <!-- <div style="font-size: 0.8em; color: #777;"><span class="label">ID:</span> ${stationIdToHighlight}</div> -->
+                </div>
+                <div class="real-time-data">
+                  ${realTimeHtml}
+                </div>
+              </div>`;
+            const position = stationMarker.getPosition()!;
+            try {
+              const overlay = new this.CustomMapOverlayCtor(position, overlayContent);
+              overlay.setMap(this.map);
+              this.highlightedStationOverlays.push(overlay);
+            } catch (e) {
+              console.error('[MapView] Error creating CustomMapOverlay:', e);
+            }
+          }
+        }
+      } else {
+        console.warn(`[MapView] No station marker found for ID: ${stationIdToHighlight} to create overlay.`);
+      }
+    });
+  } // This closing brace was missing or misplaced, ensuring createOverlaysForStations is properly closed.
 
   recenterMap(): void {
     if (!this.map || !this.userMarker) return;
@@ -302,18 +486,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   
   private loadMetroLines(): void {
     this.clearMetroLines();
-    this.clearStationMarkers(); 
+    this.clearStationMarkers();
     
-    const sub = this.apiService.getMetroLineStops().pipe(
+    this.apiService.getMetroLineStops().pipe(
+      takeUntil(this.componentDestroyed$),
+      tap(response => { // Store the response for later use
+        if (response) {
+          this.lineStopsData = response; 
+          console.log('[MapView] Metro line and stops data loaded and stored.');
+        }
+      }),
       catchError(error => {
         console.error('Error fetching metro lines:', error);
         this.snackBar.open('Failed to load metro lines', 'Close', { duration: 3000 });
+        this.lineStopsData = null; // Clear on error
         return of(null);
       })
     ).subscribe(response => {
       if (!response) return;
-      this.drawMetroLines(response);
-      this.addStationMarkers(response);
+      this.drawMetroLines(response); // Pass response directly
+      this.addStationMarkers(response); // Pass response directly
     });
   }
   
@@ -433,4 +625,3 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 }
-

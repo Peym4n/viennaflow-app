@@ -69,20 +69,31 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
     override onAdd() {
       this.div = document.createElement('div');
       this.div.style.position = 'absolute';
-      // Default styling - can be overridden by CSS classes applied to the content
-      this.div.style.border = '2px dashed cyan'; // Highly visible border
-      this.div.style.background = 'rgba(255, 0, 255, 0.7)'; // Semi-transparent magenta
-      this.div.style.padding = '8px';
-      this.div.style.borderRadius = '4px';
-      // this.div.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)'; // Remove shadow for now
-      this.div.style.zIndex = '9999'; // Extremely high z-index
-      this.div.style.minWidth = '30px'; // Ensure minimum size
-      this.div.style.minHeight = '20px'; // Ensure minimum size
-      this.div.style.visibility = 'visible'; // Force visibility
-      this.div.style.opacity = '1'; // Force opacity
-      this.div.style.color = 'black'; // Ensure text is visible against magenta
+      // Ensure the overlay container itself is interactive and blocks clicks to map below.
+      this.div.style.pointerEvents = 'auto'; 
 
-      console.log('[CustomMapOverlay] onAdd called. Div created with forced debug styles.', this.div);
+      // Visual styling (background, border, padding, text color) should be handled by the
+      // CSS classes applied to the HTML content set via innerHTML.
+      // Retain essential styles for overlay functionality:
+      // this.div.style.zIndex = '9999'; // zIndex can be useful, but let's see if default pane order is enough.
+                                      // If needed, it can be set here or managed via map panes.
+
+      // The following debug/default styles are removed to allow full CSS control from the component:
+      // this.div.style.border = '2px dashed cyan';
+      // this.div.style.background = 'rgba(255, 0, 255, 0.7)';
+      // this.div.style.padding = '8px';
+      // this.div.style.borderRadius = '4px';
+      // this.div.style.color = 'black';
+      
+      // Styles like minWidth/minHeight might be useful if content can be empty, but generally also better in CSS.
+      // this.div.style.minWidth = '30px';
+      // this.div.style.minHeight = '20px';
+
+      // Visibility and opacity should be controlled by show()/hide() or CSS if needed.
+      // this.div.style.visibility = 'visible';
+      // this.div.style.opacity = '1';
+
+      console.log('[CustomMapOverlay] onAdd called. Div created.');
 
       if (typeof this.content === 'string') {
         this.div.innerHTML = this.content;
@@ -92,12 +103,13 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       console.log(`[CustomMapOverlay] Content set. offsetWidth: ${this.div.offsetWidth}, offsetHeight: ${this.div.offsetHeight}`);
 
       const panes = this.getPanes();
-      if (panes && panes.overlayLayer) { 
-        panes.overlayLayer.appendChild(this.div);
-        console.log('[CustomMapOverlay] Appended to overlayLayer.');
-      } else if (panes && panes.floatPane) { 
-        console.warn('[CustomMapOverlay] overlayLayer not available, falling back to floatPane');
+      // Prioritize floatPane for custom overlays to appear above polylines and markers.
+      if (panes && panes.floatPane) { 
         panes.floatPane.appendChild(this.div);
+        console.log('[CustomMapOverlay] Appended to floatPane.');
+      } else if (panes && panes.overlayLayer) { // Fallback if floatPane is not available
+        console.warn('[CustomMapOverlay] floatPane not available, falling back to overlayLayer.');
+        panes.overlayLayer.appendChild(this.div);
       } else {
         console.error('[CustomMapOverlay] No suitable map pane found for overlay.');
       }
@@ -143,4 +155,4 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
     }
   }
   return CustomMapOverlayInternal;
-} 
+}

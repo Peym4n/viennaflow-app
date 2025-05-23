@@ -19,3 +19,139 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   font-size: 11px;
   font-weight: 500;
 }
+
+/* Custom Map Overlay Styles (Moved from map-view.component.css) */
+.custom-map-overlay {
+  background-color: white;
+  border: 1px solid #aaa; /* Lighter border for a softer look */
+  border-radius: 5px; /* Slightly more rounded corners */
+  padding: 10px; /* More padding */
+  font-family: 'Roboto', 'Arial', sans-serif; /* Modern font stack */
+  font-size: 13px; /* Slightly larger base font */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* Softer shadow */
+  /* min-width: 180px; */
+  color: #212529; /* Darker, more readable text */
+  line-height: 1.5;
+}
+
+.custom-map-overlay .station-info {
+  margin-bottom: 8px; /* More space before real-time data */
+}
+
+.custom-map-overlay .station-info .label {
+  font-weight: 500; /* Medium weight for labels */
+  color: #495057; /* Softer label color */
+  margin-right: 4px;
+}
+
+.custom-map-overlay .real-time-data {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #dee2e6; /* Standard light border color */
+}
+
+.custom-map-overlay .real-time-data .departure-line {
+  margin-bottom: 4px; /* Space between departure lines */
+}
+
+.custom-map-overlay .real-time-data .departure-line .line-name {
+  font-weight: bold;
+}
+
+.custom-map-overlay .real-time-data .departure-line .line-direction {
+  font-size: 0.9em;
+  font-weight: bold; /* Make direction text bold */
+}
+
+.custom-map-overlay .real-time-data .departure-line .line-countdown {
+  font-weight: bold;
+  color: #007bff; /* Bootstrap primary blue for countdown */
+  margin-left: auto; /* Pushes the countdown to the right */
+  font-weight: bold; /* Already present in existing global styles, but good to keep for clarity */
+  padding-left: 10px;
+}
+
+.custom-map-overlay .real-time-data .loading-message,
+.custom-map-overlay .real-time-data .status-message {
+  font-style: italic;
+  color: #6c757d; /* Bootstrap secondary text color */
+  font-size: 12px; /* Consistent small font for status */
+  padding-top: 5px; /* Some space for these messages */
+}
+
+/* === Styles for Custom Map Overlay Content === */
+/* Styles for the line badge (pill) */
+.gm-line-badge {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 16px;
+  min-width: 32px;
+  height: 24px;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 0 2px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  vertical-align: middle; /* Helps align with adjacent text if not a flex item itself */
+}
+
+/* Styles for each departure line in the custom overlay */
+.custom-map-overlay .real-time-data .departure-line { /* Made selector more specific */
+  display: flex;
+  align-items: center; /* Vertically align items in the middle */
+  margin-bottom: 4px; /* Add some space between departure lines */
+}
+
+/* Specific styling for elements within .departure-line */
+.custom-map-overlay .real-time-data .departure-line .line-direction-arrow { /* Made selector more specific */
+  margin: 0 4px; /* Add some space around the arrow */
+}
+
+.custom-map-overlay .real-time-data .departure-line .line-direction { /* Made selector more specific */
+  font-weight: bold; /* Make direction text bold */
+  /* Styles for direction text if needed */
+}
+
+/* Styling for the Material Icon arrow in departure lines */
+.custom-map-overlay .real-time-data .departure-line .line-direction-arrow-icon {
+  vertical-align: middle; /* Align icon with text */
+  font-size: 1.1em;       /* Adjust size as needed, slightly larger than surrounding text */
+  /* color: #333; */      /* Optional: if a specific color is desired for the arrow */
+}
+
+/* Styles for "NOW" indicator with pulsing dot */
+.custom-map-overlay .real-time-data .departure-line .line-countdown-now {
+  display: inline-flex; /* Align dot and text */
+  align-items: center;
+  font-weight: bold;
+  color: #28a745; /* Green color for "NOW" */
+  margin-left: auto; /* Pushes the countdown to the right */
+  padding-left: 10px;
+}
+
+.custom-map-overlay .real-time-data .departure-line .pulsing-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #28a745; /* Green color */
+  border-radius: 50%;
+  margin-right: 5px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  }
+}
+/* === End Styles for Custom Map Overlay Content === */
