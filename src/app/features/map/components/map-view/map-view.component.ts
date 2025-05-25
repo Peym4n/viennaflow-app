@@ -394,19 +394,34 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                       // Apply the class and only keep dynamic background-color inline
                       const lineNameHtml = `<div class="gm-line-badge" style="background-color: ${lineColor};">${line.name}</div>`;
                       
-                      let countdownHtml: string;
-                      if (firstDeparture.departureTime.countdown <= 0) {
-                        countdownHtml = `<span class="line-countdown-now"><span class="pulsing-dot"></span></span>`;
-                      } else {
-                        countdownHtml = `<span class="line-countdown">${firstDeparture.departureTime.countdown}'</span>`;
+                      // Helper function to generate HTML for a single countdown item
+                      const getCountdownItemHtml = (countdown: number, isFirst: boolean): string => {
+                        const itemClass = isFirst ? "line-countdown-item line-countdown-first" : "line-countdown-item";
+                        if (countdown <= 0) {
+                          return `<span class="${itemClass} line-countdown-now"><span class="pulsing-dot"></span>NOW</span>`;
+                        }
+                        return `<span class="${itemClass} line-countdown">${countdown}'</span>`;
+                      };
+
+                      let countdownsInnerHtml = getCountdownItemHtml(firstDeparture.departureTime.countdown, true);
+                      
+                      // Check for a second departure
+                      if (line.departures.departure.length > 1) {
+                        const secondDeparture = line.departures.departure[1];
+                        if (secondDeparture?.departureTime) {
+                          countdownsInnerHtml += ` <span class="countdown-separator">|</span> ${getCountdownItemHtml(secondDeparture.departureTime.countdown, false)}`;
+                        }
                       }
                       
+                      // Wrap all countdowns in a single wrapper for right alignment
+                      const countdownsWrapperHtml = `<span class="countdown-wrapper">${countdownsInnerHtml}</span>`;
+
                       departuresHtmlParts.push(
                         `<div class="departure-line">` +
                           lineNameHtml + // Use the styled pill
                           ` <span class="material-icons line-direction-arrow-icon">chevron_right</span> ` +
                           `<span class="line-direction">${line.towards}</span>: ` +
-                          countdownHtml + // Use the conditional countdown HTML
+                          countdownsWrapperHtml + // Use the wrapped countdowns HTML
                         `</div>`
                       );
                     }
@@ -431,10 +446,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             const overlayContent = `
               <div class="custom-map-overlay">
                 <div class="station-info">
-                  <div><span class="label">Station:</span> ${stationName}</div>
-                  <div><span class="label">Diva:</span> ${divaValue !== undefined ? divaValue : 'N/A'}</div>
-                  <!-- Optionally, to keep ID for reference, uncomment below: -->
-                  <!-- <div style="font-size: 0.8em; color: #777;"><span class="label">ID:</span> ${stationIdToHighlight}</div> -->
+                  <div class="station-name-bold">${stationName}</div>
                 </div>
                 <div class="real-time-data">
                   ${realTimeHtml}
