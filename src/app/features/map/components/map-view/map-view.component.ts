@@ -131,6 +131,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
+        gestureHandling: 'greedy' // Allow one-finger panning and zooming
       };
       const googleMapsConfig = environment.googleMaps as ExtendedGoogleMapsConfig;
       if (googleMapsConfig?.mapId) {
