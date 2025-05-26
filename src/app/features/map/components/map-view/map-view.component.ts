@@ -43,8 +43,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private componentDestroyed$ = new Subject<void>();
   
   private stationMarkerMap = new Map<number, { marker: google.maps.Marker, diva?: number | string }>();
-  private highlightedStationIds = new Set<number>();
+  private highlightedStationIds = new Set<number>(); // May still be useful for tracking which stations *should* be highlighted
   private highlightedStationOverlays: ICustomMapOverlay[] = [];
+  private highlightMarkers: google.maps.Marker[] = []; // For "always shown" highlight markers
   private CustomMapOverlayCtor!: CustomMapOverlayConstructor;
   private lineStopsData: LineStopsResponse | null = null; // To store line data for filtering
 
@@ -59,7 +60,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoading = true;
   hasLocationError = false;
   showMetroLines = true;
-  showStations = true;
+  showStations = false; // Stations will be hidden initially
   
   private snackBar = inject(MatSnackBar);
   private mapsService = inject(GoogleMapsService);
@@ -349,17 +350,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private clearHighlightsAndOverlays(): void {
-    this.highlightedStationIds.forEach(stationId => {
-      const stationData = this.stationMarkerMap.get(stationId);
-      const marker = stationData?.marker;
-      if (marker) {
-        const currentIcon = marker.getIcon() as google.maps.Symbol;
-        if (currentIcon && typeof currentIcon === 'object') {
-          marker.setIcon({ ...currentIcon, fillColor: '#FFFFFF' }); // Reset color
-        }
-      }
-    });
-    this.highlightedStationIds.clear();
+    // Clear and remove the dedicated highlight markers
+    console.log('[MapView] Clearing old highlightMarkers. Count:', this.highlightMarkers.length);
+    this.highlightMarkers.forEach(marker => marker.setMap(null));
+    this.highlightMarkers = [];
+
+    // The original station markers (from stationMarkerMap) are not modified, so no need to reset their color here.
+    this.highlightedStationIds.clear(); // Clear the set of IDs that were highlighted
 
     console.log('[MapView] Clearing old highlightedStationOverlays. Count:', this.highlightedStationOverlays.length);
     this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
@@ -380,15 +377,33 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     stationDivaMap.forEach((divaValue, stationIdToHighlight) => {
       const stationData = this.stationMarkerMap.get(stationIdToHighlight);
-      const stationMarker = stationData?.marker;
+      // Use the original stationMarker for position and title, but create a new one for the highlight
+      const originalStationMarker = stationData?.marker; 
 
-      if (stationMarker) {
-        const currentIcon = stationMarker.getIcon() as google.maps.Symbol;
-        if (currentIcon && typeof currentIcon === 'object') {
-          stationMarker.setIcon({ ...currentIcon, fillColor: '#6495ED' }); // Highlight marker with Cornflower Blue
-          this.highlightedStationIds.add(stationIdToHighlight);
+      if (originalStationMarker && originalStationMarker.getPosition()) {
+        this.highlightedStationIds.add(stationIdToHighlight); // Track that this station ID has a highlight/overlay
 
-          let realTimeHtml = '';
+        const originalIcon = originalStationMarker.getIcon() as google.maps.Symbol | null;
+        const originalStrokeColor = (originalIcon && typeof originalIcon === 'object' && originalIcon.strokeColor) ? originalIcon.strokeColor : '#000000'; // Default to black if not found
+
+        // Create a new marker for the highlight
+        const highlightMarker = new google.maps.Marker({
+          position: originalStationMarker.getPosition(),
+          map: this.map,
+          title: originalStationMarker.getTitle(), // Same title
+          icon: { // Style for the highlight marker
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7, // Same scale or slightly different if desired
+            fillColor: '#6495ED', // Cornflower Blue for highlight
+            fillOpacity: 1,
+            strokeColor: originalStrokeColor, // Use original marker's stroke color
+            strokeWeight: originalIcon?.strokeWeight || 2 // Use original stroke weight or default
+          },
+          zIndex: google.maps.Marker.MAX_ZINDEX + 1 // Ensure it's on top
+        });
+        this.highlightMarkers.push(highlightMarker);
+
+        let realTimeHtml = '';
           // Check for our custom errorOccurred flag first
           if (monitorResponse && (monitorResponse as any).errorOccurred) {
             realTimeHtml = `<div class="status-message">Error loading real-time data.</div>`;
@@ -467,8 +482,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             realTimeHtml = `<div class="status-message">Real-time data format error or empty response.</div>`;
           }
 
-          if (this.CustomMapOverlayCtor && stationMarker.getPosition()) {
-            const stationName = stationMarker.getTitle() || 'Unknown Station';
+          if (this.CustomMapOverlayCtor && highlightMarker.getPosition()) { // Use highlightMarker for overlay
+            const stationName = highlightMarker.getTitle() || 'Unknown Station';
             const overlayContent = `
               <div class="custom-map-overlay">
                 <div class="station-info">
@@ -478,18 +493,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                   ${realTimeHtml}
                 </div>
               </div>`;
-            const position = stationMarker.getPosition()!;
+            const position = highlightMarker.getPosition()!; // Corrected to use highlightMarker
             try {
               const overlay = new this.CustomMapOverlayCtor(position, overlayContent);
-              overlay.setMap(this.map);
+              overlay.setMap(this.map); // Attach overlay to the map
               this.highlightedStationOverlays.push(overlay);
             } catch (e) {
               console.error('[MapView] Error creating CustomMapOverlay:', e);
             }
           }
-        }
+        // Original stationMarker (from stationMarkerMap) is not modified in appearance
       } else {
-        console.warn(`[MapView] No station marker found for ID: ${stationIdToHighlight} to create overlay.`);
+        console.warn(`[MapView] No original station marker found for ID: ${stationIdToHighlight} to create highlight marker and overlay.`);
       }
     });
   } // This closing brace was missing or misplaced, ensuring createOverlaysForStations is properly closed.

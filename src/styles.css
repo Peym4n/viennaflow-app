@@ -173,7 +173,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   margin: 0 -2px;
   vertical-align: middle; /* Align icon with text */
   font-size: 1.1em;       /* Adjust size as needed, slightly larger than surrounding text */
-  /* color: #333; */      /* Optional: if a specific color is desired for the arrow */
+  color: #888;
 }
 
 /* Styles for "NOW" indicator with pulsing dot */
@@ -209,7 +209,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 .custom-map-overlay .real-time-data .departure-line .countdown-separator {
   margin: 0 4px; /* Adds 4px space on left and right of the pipe */
-  color: #6c757d; /* Softer color for the separator */
+  color: #888; /* Softer color for the separator */
 }
 
 @keyframes blink-interchange {
