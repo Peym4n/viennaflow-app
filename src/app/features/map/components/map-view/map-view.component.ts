@@ -139,6 +139,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       this.map = new window.google.maps.Map(this.mapContainer.nativeElement, mapOptions);
       
+      // Add right-click listener to the map
+      this.map.addListener('rightclick', (mapsMouseEvent: google.maps.MapMouseEvent) => {
+        this.handleMapRightClick(mapsMouseEvent);
+      });
+      
       window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
         console.log('Map fully loaded and ready');
         this.loadMetroLines();
@@ -154,6 +159,25 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.hasLocationError = true;
     this.isLoading = false;
     this.snackBar.open(message, 'Close', { duration: 5000 });
+  }
+
+  private handleMapRightClick(mapsMouseEvent: google.maps.MapMouseEvent): void {
+    if (mapsMouseEvent.latLng) {
+      const lat = parseFloat(mapsMouseEvent.latLng.lat().toFixed(6));
+      const lng = parseFloat(mapsMouseEvent.latLng.lng().toFixed(6));
+      const coordsString = `${lng}, ${lat}`; // Format: longitude, latitude
+
+      navigator.clipboard.writeText(coordsString).then(() => {
+        this.snackBar.open(`Coordinates copied: ${coordsString}`, 'Close', {
+          duration: 2000, // Slightly shorter duration for quick feedback
+        });
+      }).catch(err => {
+        console.error('Failed to copy coordinates: ', err);
+        this.snackBar.open('Failed to copy coordinates.', 'Close', {
+          duration: 3000,
+        });
+      });
+    }
   }
 
   private subscribeToLocationUpdates(): void {
@@ -361,7 +385,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       if (stationMarker) {
         const currentIcon = stationMarker.getIcon() as google.maps.Symbol;
         if (currentIcon && typeof currentIcon === 'object') {
-          stationMarker.setIcon({ ...currentIcon, fillColor: 'red' }); // Highlight marker
+          stationMarker.setIcon({ ...currentIcon, fillColor: '#6495ED' }); // Highlight marker with Cornflower Blue
           this.highlightedStationIds.add(stationIdToHighlight);
 
           let realTimeHtml = '';
@@ -399,7 +423,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                       const getCountdownItemHtml = (countdown: number, isFirst: boolean): string => {
                         const itemClass = isFirst ? "line-countdown-item line-countdown-first" : "line-countdown-item";
                         if (countdown <= 0) {
-                          return `<span class="${itemClass} line-countdown-now"><span class="pulsing-dot"></span>NOW</span>`;
+                          // HTML for two blinking dots
+                          return `<span class="${itemClass} line-countdown-now blinking-dots-container"><span class="blinking-dot dot1"></span><span class="blinking-dot dot2"></span></span>`;
                         }
                         return `<span class="${itemClass} line-countdown">${countdown}'</span>`;
                       };
@@ -539,6 +564,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
               strokeWeight: 4,
               map: this.map,
               visible: this.showMetroLines
+            });
+            // Add right-click listener to each polyline
+            polyline.addListener('rightclick', (polylineMouseEvent: google.maps.PolyMouseEvent) => {
+              this.handleMapRightClick(polylineMouseEvent); // Re-use the same handler
             });
             this.metroLinePolylines.push(polyline);
           }
