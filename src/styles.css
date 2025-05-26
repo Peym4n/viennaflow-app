@@ -58,7 +58,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   background-color: white;
   border: 1px solid #aaa; /* Lighter border for a softer look */
   border-radius: 5px; /* Slightly more rounded corners */
-  padding: 10px; /* More padding */
+  padding: 6px; /* More padding */
   font-family: 'Roboto', 'Arial', sans-serif; /* Modern font stack */
   font-size: 13px; /* Slightly larger base font */
   box-shadow: 0 2px 6px rgba(0,0,0,0.15); /* Softer shadow */
@@ -68,7 +68,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 }
 
 .custom-map-overlay .station-info {
-  margin-bottom: 8px; /* More space before real-time data */
+  margin-bottom: 5px; /* More space before real-time data */
 }
 
 .custom-map-overlay .station-info .label {
@@ -80,11 +80,11 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 .custom-map-overlay .station-info .station-name-bold {
   font-weight: bold;
   font-size: 1.1em; /* Slightly larger for emphasis if desired */
+  text-align: center; /* Center align the station name */
 }
 
 .custom-map-overlay .real-time-data {
-  margin-top: 10px;
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid #dee2e6; /* Standard light border color */
 }
 
@@ -117,9 +117,9 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   color: #007bff; /* Bootstrap primary blue for countdown */
 }
 
-/* Add padding only to the first countdown item in the wrapper */
+/* Add padding only to the first countdown itemF in the wrapper */
 .custom-map-overlay .real-time-data .departure-line .countdown-wrapper .line-countdown-item:first-child {
-  padding-left: 10px;
+  padding-left: 8px;
 }
 
 .custom-map-overlay .real-time-data .loading-message,
@@ -136,13 +136,12 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   display: flex;
   justify-content: center;
   align-items: center;
-  border-radius: 16px;
-  min-width: 32px;
+  border-radius: 12px;
   height: 24px;
   color: white;
   font-weight: 700;
   font-size: 14px;
-  padding: 0 2px;
+  padding: 0 4px;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
   vertical-align: middle; /* Helps align with adjacent text if not a flex item itself */
@@ -153,6 +152,10 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   display: flex;
   align-items: center; /* Vertically align items in the middle */
   margin-bottom: 4px; /* Add some space between departure lines */
+}
+
+.custom-map-overlay .real-time-data .departure-line:last-child {
+  margin-bottom: 0; /* Remove margin from the last departure line */
 }
 
 /* Specific styling for elements within .departure-line */
@@ -167,32 +170,41 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 /* Styling for the Material Icon arrow in departure lines */
 .custom-map-overlay .real-time-data .departure-line .line-direction-arrow-icon {
+  margin: 0 -2px;
   vertical-align: middle; /* Align icon with text */
   font-size: 1.1em;       /* Adjust size as needed, slightly larger than surrounding text */
   /* color: #333; */      /* Optional: if a specific color is desired for the arrow */
 }
 
 /* Styles for "NOW" indicator with pulsing dot */
-/* Styles for "NOW" indicator (now part of line-countdown-item) */
-.custom-map-overlay .real-time-data .departure-line .line-countdown-item.line-countdown-now {
-  display: inline-flex; /* Align dot and text */
-  align-items: center;
-  /* font-weight: bold; is inherited from .line-countdown-item */
-  color: #28a745; /* Green color for "NOW" */
+/* Styles for "NOW" indicator (now part of line-countdown-item) - will be a container for blinking dots */
+.custom-map-overlay .real-time-data .departure-line .line-countdown-item.line-countdown-now.blinking-dots-container {
+  display: flex; /* Changed to flex for column direction */
+  flex-direction: column; /* Stack dots vertically */
+  align-items: center; /* Center dots horizontally in the column */
+  justify-content: center; /* Center dots vertically if container has more height */
+  /* No color or font-weight needed here as it's just a container for dots */
+  /* Adjust line-height or height of this container if necessary to fit with other countdown text */
+  line-height: normal; /* Reset line-height if inherited */
+  min-width: 10px; /* Ensure it has some width to contain the dots */
 }
 
-/* Remove padding-left from .line-countdown-now if it's not the first child (handled by :first-child on .line-countdown-item) */
-.custom-map-overlay .real-time-data .departure-line .countdown-wrapper .line-countdown-item.line-countdown-now:not(:first-child) {
+/* Remove padding-left from .blinking-dots-container if it's not the first child */
+.custom-map-overlay .real-time-data .departure-line .countdown-wrapper .line-countdown-item.blinking-dots-container:not(:first-child) {
   padding-left: 0;
 }
 
-.custom-map-overlay .real-time-data .departure-line .pulsing-dot {
-  width: 8px;
-  height: 8px;
-  background-color: #28a745; /* Green color */
+.custom-map-overlay .real-time-data .departure-line .blinking-dot {
+  width: 6px; /* Smaller dot size */
+  height: 6px;
+  background-color: #28a745; /* Green color for dots */
   border-radius: 50%;
-  margin-right: 5px;
-  animation: pulse 1.5s infinite ease-in-out;
+  margin: 1px 0; /* Vertical spacing between dots */
+  animation: blink-interchange 1s infinite;
+}
+
+.custom-map-overlay .real-time-data .departure-line .blinking-dot.dot2 {
+  animation-delay: 0.5s; /* Offset the second dot's animation */
 }
 
 .custom-map-overlay .real-time-data .departure-line .countdown-separator {
@@ -200,18 +212,12 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   color: #6c757d; /* Softer color for the separator */
 }
 
-@keyframes pulse {
-  0% {
-    transform: scale(0.9);
-    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+@keyframes blink-interchange {
+  0%, 100% {
+    opacity: 1;
   }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
-  }
-  100% {
-    transform: scale(0.9);
-    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  50% {
+    opacity: 0.2;
   }
 }
 /* === End Styles for Custom Map Overlay Content === */
