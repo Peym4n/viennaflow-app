@@ -174,8 +174,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private handleMapRightClick(mapsMouseEvent: google.maps.MapMouseEvent): void {
     if (mapsMouseEvent.latLng) {
-      const lat = parseFloat(mapsMouseEvent.latLng.lat().toFixed(6));
-      const lng = parseFloat(mapsMouseEvent.latLng.lng().toFixed(6));
+      const lat = parseFloat(mapsMouseEvent.latLng.lat().toFixed(7));
+      const lng = parseFloat(mapsMouseEvent.latLng.lng().toFixed(7));
       const coordsString = `${lng}, ${lat}`; // Format: longitude, latitude
 
       navigator.clipboard.writeText(coordsString).then(() => {
