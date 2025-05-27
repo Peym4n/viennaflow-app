@@ -63,6 +63,7 @@ export class GoogleMapsService {
           `key=${this.API_KEY}`,
           'callback=initMap',
           'v=weekly',
+          'libraries=geometry' // Load the geometry library
         ].join('&');
 
         // Configure the script
@@ -96,5 +97,44 @@ export class GoogleMapsService {
    */
   isGoogleMapsLoaded(): boolean {
     return this.isLoaded && !!window.google?.maps;
+  }
+
+  /**
+   * Gets walking durations from an origin to multiple destinations using Distance Matrix API.
+   * @param origin The starting point.
+   * @param destinations An array of destination points.
+   * @returns An Observable emitting the DistanceMatrixResponse or null on error/API not ready.
+   */
+  public getWalkingDurationsToStations(
+    origin: google.maps.LatLngLiteral,
+    destinations: google.maps.LatLngLiteral[]
+  ): Observable<google.maps.DistanceMatrixResponse | null> {
+    if (!this.isGoogleMapsLoaded() || !window.google?.maps?.DistanceMatrixService) {
+      console.error('Google Maps API or DistanceMatrixService not loaded.');
+      return of(null);
+    }
+
+    const matrixService = new window.google.maps.DistanceMatrixService();
+    const request: google.maps.DistanceMatrixRequest = {
+      origins: [origin],
+      destinations: destinations,
+      travelMode: window.google.maps.TravelMode.WALKING,
+      unitSystem: window.google.maps.UnitSystem.METRIC,
+    };
+
+    return new Observable(observer => {
+      matrixService.getDistanceMatrix(request, (
+        response: google.maps.DistanceMatrixResponse | null, 
+        status: google.maps.DistanceMatrixStatus
+      ) => {
+        if (status === window.google.maps.DistanceMatrixStatus.OK && response) {
+          observer.next(response);
+        } else {
+          console.error('Distance Matrix request failed due to ' + status, response);
+          observer.next(null); // Emit null for handled errors to not break forkJoin
+        }
+        observer.complete();
+      });
+    });
   }
 }

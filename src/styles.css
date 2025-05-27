@@ -71,17 +71,49 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   margin-bottom: 5px; /* More space before real-time data */
 }
 
-.custom-map-overlay .station-info .label {
-  font-weight: 500; /* Medium weight for labels */
-  color: #495057; /* Softer label color */
-  margin-right: 4px;
+/* New header for station name and walking time */
+.custom-map-overlay .station-info-header {
+  display: flex;
+  justify-content: space-between; /* Puts station name left, walking time right */
+  align-items: center; /* Vertically align items */
+  margin-bottom: 5px; /* Space before the real-time data separator */
 }
 
-.custom-map-overlay .station-info .station-name-bold {
+.custom-map-overlay .station-info-header .station-name-bold {
   font-weight: bold;
-  font-size: 1.1em; /* Slightly larger for emphasis if desired */
-  text-align: center; /* Center align the station name */
+  font-size: 1.1em;
+  /* text-align: left; /* Align to left now, as it's part of a flex row */
+  /* No margin-bottom needed here as parent .station-info-header has it */
+  flex-grow: 1; /* Allow station name to take available space */
+  margin-right: 8px; /* Space between name and walking time */
 }
+
+.custom-map-overlay .station-info-header .walking-time-info {
+  display: flex;
+  align-items: center;
+  font-size: 0.95em; /* Slightly increased for better visibility next to name */
+  color: #444; /* Darker for better contrast */
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+.custom-map-overlay .station-info-header .walking-time-icon {
+  font-size: 1.2em; /* Slightly larger icon */
+  margin-right: 3px;
+  vertical-align: middle; 
+  color: #555;
+}
+
+.custom-map-overlay .station-info-header .walking-time-value {
+  font-weight: 500; /* Medium weight for the time value */
+}
+
+
+/* Old .station-info .label and .walking-time can be removed or commented if no longer used directly */
+/* .custom-map-overlay .station-info .label { ... } */
+/* .custom-map-overlay .station-info .walking-time { ... } */
+/* .custom-map-overlay .station-info .walking-time-icon { ... } */
+/* .custom-map-overlay .station-info .station-name-bold (old one, if different from header's) */
+
 
 .custom-map-overlay .real-time-data {
   padding-top: 6px;
