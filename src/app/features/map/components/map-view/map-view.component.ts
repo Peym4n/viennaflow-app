@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, AfterViewInit, OnDestroy, inject } from '@angular/core';
+import { Component, OnInit, AfterViewInit, OnDestroy, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
@@ -372,7 +372,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             this.clearHighlightsAndOverlays(); 
             this.createOverlaysForStations(this.activeDivaMapForPolling, null); 
         }
+        console.log('[MapView] Fetching real-time data for stations:', newDivaValues);
         return this.apiService.getRealTimeDepartures(newDivaValues).pipe(
+          tap((response: MonitorApiResponse | null) => {
+            if (response && response.data?.monitors) {
+              console.log(`[MapView] Received monitor data with ${response.data.monitors.length} station groups`);
+              // Log the metro lines received for debugging
+              let metroLineCount = 0;
+              response.data.monitors.forEach(monitor => {
+                if (monitor.lines) {
+                  metroLineCount += monitor.lines.length;
+                }
+              });
+              console.log(`[MapView] Total metro lines received: ${metroLineCount}`);
+            }
+          }),
           catchError((err: any) => {
             console.error('[MapView] Error fetching monitor data:', err);
             this.clearHighlightsAndOverlays();

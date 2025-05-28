@@ -1,6 +1,6 @@
 import { Injectable, NgZone, inject } from '@angular/core'; // Added NgZone, inject
 import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http'; // Added HttpHeaders
-import { Observable, of, switchMap, map } from 'rxjs'; // Added switchMap, map
+import { Observable, of, switchMap, catchError, tap } from 'rxjs'; // Added needed operators
 import { NearbySteig, MonitorApiResponse } from '@shared-types/api-models';
 import { SessionService } from './session.service'; // Import SessionService
 import * as CryptoJS from 'crypto-js'; // For HMAC signing
@@ -112,23 +112,68 @@ export class ApiService {
    * @returns Observable that emits real-time monitor data via SSE.
    */
   // Changed from SSE to a single HTTP GET request for polling by the client
-  getRealTimeDepartures(divaValues: (string | number)[]): Observable<MonitorApiResponse> {
-    if (!divaValues || divaValues.length === 0) {
+  /**
+   * Fetches real-time departure data from the Wiener Linien OGD API via our optimized monitor endpoint.
+   * @param divaIds An array of DIVA numbers for the stations.
+   * @returns Observable with real-time monitor data.
+   */
+  getRealTimeDepartures(divaIds: (string | number)[]): Observable<MonitorApiResponse> {
+    if (!divaIds || divaIds.length === 0) {
       // Return an Observable of a valid MonitorApiResponse with empty monitors
       return of({ 
         data: { monitors: [] }, 
-        message: { value: "No DIVA values provided for monitoring.", messageCode: 0, serverTime: new Date().toISOString()} 
+        message: { value: "No DIVA values provided for monitoring.", messageCode: 0, serverTime: new Date().toISOString() },
+        timestamp: Date.now()
       } as MonitorApiResponse);
     }
 
-    let params = new HttpParams();
-    divaValues.forEach(diva => {
-      // HttpParams automatically handles URL encoding for parameter values
-      params = params.append('diva', diva.toString());
-    });
+    // Convert all divaIds to strings for consistency
+    const normalizedDivaIds = divaIds.map(diva => diva.toString());
 
-    // The backend endpoint remains the same, but now serves a single JSON response
-    return this.http.get<MonitorApiResponse>('/api/getWienerLinienMonitor', { params });
+    // Use POST request with the divaIds in the request body
+    return this.http.post<MonitorApiResponse>('/api/routes/monitor', { divaIds: normalizedDivaIds }).pipe(
+      tap((response: MonitorApiResponse) => {
+        console.log(`[API] Received monitor data with ${response.data?.monitors?.length || 0} stations`);
+      }),
+      catchError(error => {
+        console.error('Error fetching real-time departures:', error);
+        return of({
+          data: { monitors: [] },
+          message: { 
+            value: 'Error fetching real-time departures', 
+            messageCode: 0, 
+            serverTime: new Date().toISOString() 
+          },
+          errorOccurred: true,
+          timestamp: Date.now()
+        } as MonitorApiResponse);
+      })
+    );
+  }
+
+  /**
+   * Get monitor data for stations using long-polling approach.
+   * This uses the new throttled and cached endpoint that limits Wiener Linien API calls.
+   * @param divaIds An array of DIVA numbers for the stations.
+   * @returns Observable with real-time monitor data.
+   */
+  getMonitorData(divaIds: (string | number)[]): Observable<MonitorApiResponse> {
+    // Convert all DIVAs to strings and ensure they're unique
+    const normalizedDivaIds = [...new Set(divaIds.map(String))];
+    
+    return this.http.post<MonitorApiResponse>('/api/routes/monitor', { divaIds: normalizedDivaIds }).pipe(
+      catchError(error => {
+        console.error('Error fetching throttled monitor data:', error);
+        
+        // Return an error response that the UI can handle
+        return of({
+          errorOccurred: true,
+          timestamp: Date.now(),
+          data: null,
+          message: error.message || 'Unknown error occurred'
+        } as MonitorApiResponse);
+      })
+    );
   }
 
   /**
@@ -160,6 +205,10 @@ export class ApiService {
         });
 
         return this.http.post('/api/routes/walking-matrix', payload, { headers });
+      }),
+      catchError(error => {
+        console.error('Error fetching walking matrix:', error);
+        throw error; // Re-throw to let the component handle it
       })
     );
   }
