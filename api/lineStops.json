@@ -3087,15 +3087,6 @@
       "lineStrings": [
         {
           "type": "LineString",
-          "coordinates": []
-        },
-        {
-          "type": "LineString",
-          "coordinates": []
-        },
-
-        {
-          "type": "LineString",
           "name": "hin",
           "coordinates": [
             [16.30975999, 48.1301146],
