@@ -458,20 +458,45 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     stationTargets: { stationId: number; latLng: google.maps.LatLngLiteral }[],
     isInitialFetchForSet: boolean // To know if this is the first fetch for this set of stations
   ): void {
-    this.mapsService.getWalkingDurationsToStations(userLocationLiteral, stationTargets.map(st => st.latLng))
-      .pipe(takeUntil(this.componentDestroyed$)) // Ensure cleanup
-      .subscribe(matrixResponse => {
-        // Even if the response is null or error, we proceed to update last location if it was an initial fetch
-        if (isInitialFetchForSet || (matrixResponse && matrixResponse.rows && matrixResponse.rows.length > 0)) {
+    const payload = {
+      origins: [userLocationLiteral],
+      destinations: stationTargets.map(st => st.latLng)
+    };
+
+    this.apiService.getSecureWalkingMatrix(payload)
+      .pipe(
+        takeUntil(this.componentDestroyed$),
+        catchError(err => {
+          console.error('[MapView] Error fetching secure walking matrix:', err);
+          // Potentially update lastWalkingTimeUpdateLocation even on error if it's an initial fetch,
+          // to prevent immediate re-fetch by the timer if the error was transient.
+          if (isInitialFetchForSet) {
+            this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(userLocationLiteral.lat, userLocationLiteral.lng);
+            console.log('[MapView] Updated lastWalkingTimeUpdateLocation (on error) to:', userLocationLiteral);
+          }
+          this.stationWalkingTimes.clear(); // Clear old times on error
+           // Refresh overlays to show no walking times or an error state if desired
+          this.clearHighlightsAndOverlays();
+          this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
+          return of(null); // Continue the stream, effectively swallowing the error for this specific fetch
+        })
+      )
+      .subscribe(matrixResponse => { // matrixResponse is the Google Distance Matrix API JSON structure
+        if (!matrixResponse) { // Error was handled by catchError
+            return;
+        }
+
+        // Successful response from backend (which proxied Google)
+        if (isInitialFetchForSet || (matrixResponse.rows && matrixResponse.rows.length > 0)) {
              this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(userLocationLiteral.lat, userLocationLiteral.lng);
              console.log('[MapView] Updated lastWalkingTimeUpdateLocation to:', userLocationLiteral);
         }
 
         const newWalkingTimes = new Map<number, number>();
-        if (matrixResponse && matrixResponse.rows && matrixResponse.rows.length > 0) {
-          matrixResponse.rows[0].elements.forEach((element, index) => {
+        if (matrixResponse.rows && matrixResponse.rows.length > 0) {
+          matrixResponse.rows[0].elements.forEach((element: any, index: number) => { // element is from Google's API structure
             const targetStation = stationTargets[index];
-            if (targetStation && element.status === google.maps.DistanceMatrixElementStatus.OK && element.duration) {
+            if (targetStation && element.status === 'OK' && element.duration) { // Google uses 'OK' string for element status
               const durationInMinutes = Math.round(element.duration.value / 60);
               newWalkingTimes.set(targetStation.stationId, durationInMinutes);
             } else {
@@ -479,10 +504,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             }
           });
         }
-        this.stationWalkingTimes = newWalkingTimes; // Replace old map with new results
-        console.log('[MapView] Walking times fetched/updated:', this.stationWalkingTimes);
+        this.stationWalkingTimes = newWalkingTimes;
+        console.log('[MapView] Walking times fetched/updated via backend:', this.stationWalkingTimes);
 
-        // Refresh overlays with (potentially) new walking times and existing real-time data
         this.clearHighlightsAndOverlays();
         this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
       });

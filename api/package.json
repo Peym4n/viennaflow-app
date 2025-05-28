@@ -8,6 +8,7 @@
   "dependencies": {
     "@dotenvx/dotenvx": "^1.44.1",
     "@supabase/supabase-js": "^2.49.1",
+    "@upstash/redis": "^1.34.9",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {

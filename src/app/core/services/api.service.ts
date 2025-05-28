@@ -1,7 +1,9 @@
-import { Injectable, NgZone } from '@angular/core'; // Added NgZone
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Injectable, NgZone, inject } from '@angular/core'; // Added NgZone, inject
+import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http'; // Added HttpHeaders
+import { Observable, of, switchMap, map } from 'rxjs'; // Added switchMap, map
 import { NearbySteig, MonitorApiResponse } from '@shared-types/api-models';
+import { SessionService } from './session.service'; // Import SessionService
+import * as CryptoJS from 'crypto-js'; // For HMAC signing
 
 // Type definitions for the API responses
 export interface MetroLine {
@@ -49,7 +51,9 @@ export interface LineStopsResponse {
   providedIn: 'root'
 })
 export class ApiService {
-  constructor(private http: HttpClient, private ngZone: NgZone) {} // Injected NgZone
+  private sessionService = inject(SessionService); // Inject SessionService
+
+  constructor(private http: HttpClient, private ngZone: NgZone) {} 
 
   /**
    * Fetches metro line stops data from the API
@@ -125,5 +129,38 @@ export class ApiService {
 
     // The backend endpoint remains the same, but now serves a single JSON response
     return this.http.get<MonitorApiResponse>('/api/getWienerLinienMonitor', { params });
+  }
+
+  /**
+   * Fetches walking durations from the secure backend endpoint.
+   * @param payload Object containing origins and destinations LatLngLiterals.
+   * @returns Observable with the Distance Matrix API response from the backend.
+   */
+  getSecureWalkingMatrix(payload: {
+    origins: { lat: number; lng: number }[];
+    destinations: { lat: number; lng: number }[];
+  }): Observable<any> { // Consider creating a stricter type for the expected response
+    return this.sessionService.ensureSessionSigningKey().pipe(
+      switchMap(sessionSigningKey => {
+        if (!sessionSigningKey) {
+          console.error('No session signing key available for secure call.');
+          throw new Error('Session not initialized or key not available.');
+        }
+
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        // Ensure the payload stringification is identical to how the server expects it
+        // Vercel's req.body is typically the parsed object if Content-Type is application/json
+        const messageToSign = timestamp + '.' + JSON.stringify(payload); 
+        const signature = CryptoJS.HmacSHA256(messageToSign, sessionSigningKey).toString(CryptoJS.enc.Hex);
+
+        const headers = new HttpHeaders({
+          'Content-Type': 'application/json',
+          'X-Timestamp': timestamp,
+          'X-Signature': signature,
+        });
+
+        return this.http.post('/api/routes/walking-matrix', payload, { headers });
+      })
+    );
   }
 }
