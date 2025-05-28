@@ -8,9 +8,9 @@ import { GoogleMapsService } from '../../../../core/services/google-maps.service
 import { ApiService, LineStopsResponse, MetroLine } from '../../../../core/services/api.service';
 import { LocationService, Coordinates } from '../../../../core/services/location.service';
 import { environment } from '../../../../../environments/environment';
-import { Observable, of, Subject, Subscription, forkJoin, timer } from 'rxjs'; // Added forkJoin, timer
-import { catchError, map, takeUntil, switchMap, tap, mapTo, exhaustMap } from 'rxjs/operators'; // Added tap, mapTo, exhaustMap
-import { NearbySteig, MonitorApiResponse, MonitorLine as RealTimeMonitorLine, Monitor } from '@shared-types/api-models'; // Added MonitorApiResponse and RealTimeMonitorLine
+import { Subject, Observable, of, Subscription, timer, interval } from 'rxjs';
+import { catchError, map, takeUntil, switchMap, tap, mapTo, exhaustMap, filter, take } from 'rxjs/operators';
+import { NearbySteig, MonitorApiResponse, MonitorLine as RealTimeMonitorLine, Monitor } from '@shared-types/api-models';
 import { createCustomMapOverlayClass, ICustomMapOverlay, CustomMapOverlayConstructor } from './custom-map-overlay';
 
 // Define an extended environment interface for type safety
@@ -73,6 +73,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   isLoading = true;
   hasLocationError = false;
+  private locationErrorSubscription: Subscription | null = null;
   showMetroLines = true;
   showStations = false; // Stations will be hidden initially
   
@@ -133,6 +134,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     if (this.walkingTimeUpdateSubscription) { 
       this.walkingTimeUpdateSubscription.unsubscribe();
+    }
+    if (this.locationErrorSubscription) {
+      this.locationErrorSubscription.unsubscribe();
     }
 
     this.clearMetroLines();
@@ -213,11 +217,69 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private subscribeToLocationUpdates(): void {
+    // Subscribe to the location availability flag
+    this.locationService.locationAvailable$.pipe(
+      takeUntil(this.componentDestroyed$)
+    ).subscribe(isAvailable => {
+      console.log('Location availability changed:', isAvailable);
+      const previousErrorState = this.hasLocationError;
+      this.hasLocationError = !isAvailable;
+      
+      // If location becomes available after being unavailable (state change)
+      if (isAvailable && previousErrorState) {
+        console.log('Location is now available after being unavailable, clearing error state');
+        
+        // Stop any retry attempts
+        if (this.locationErrorSubscription) {
+          this.locationErrorSubscription.unsubscribe();
+          this.locationErrorSubscription = null;
+        }
+        
+        // Use the last known coordinates directly from the location service instead of subscribing
+        // This avoids the potential error when trying to get coordinates through subscription
+        const lastKnownCoords = this.locationService.getLastKnownCoordinates();
+        if (lastKnownCoords && this.map) {
+          console.log('Centering map on last known location:', lastKnownCoords);
+          const userLatLng = new google.maps.LatLng(lastKnownCoords.latitude, lastKnownCoords.longitude);
+          this.map.setCenter(userLatLng);
+          this.map.setZoom(15);
+          
+          // Create or update user marker
+          if (!this.userMarker) {
+            this.userMarker = new google.maps.Marker({
+              position: userLatLng,
+              map: this.map,
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 7,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                strokeColor: 'white',
+                strokeWeight: 2,
+              },
+              title: 'Your Location'
+            });
+          } else {
+            this.userMarker.setPosition(userLatLng);
+          }
+          
+          // Also fetch nearby stops now that we have location
+          this.fetchAndDisplayNearbySteige(lastKnownCoords).subscribe();
+        } else {
+          console.warn('No last known coordinates available after location became available');
+        }
+      } else if (!isAvailable && !this.locationErrorSubscription) {
+        console.log('Location is now unavailable, setting up error handling');
+        this.setupLocationErrorHandling();
+      }
+    });
+    
+    // Main subscription for location updates and processing
     this.locationService.currentLocation$.pipe(
       takeUntil(this.componentDestroyed$),
       switchMap((coordinates: Coordinates | null) => {
         if (!coordinates) {
-          console.warn('MapViewComponent received null coordinates from LocationService.');
+          console.error('No location coordinates available');
           this.hasLocationError = true;
           this.isLoading = false;
           return of(null);
@@ -256,10 +318,43 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         console.error('MapViewComponent error during location update or Steige fetching:', error);
         this.hasLocationError = true;
         this.isLoading = false;
+        this.setupLocationErrorHandling();
         const message = error?.message || 'Could not process location or fetch data.';
         this.snackBar.open(`Error: ${message}`, 'Close', { duration: 5000 });
       }
     });
+    
+    // Set up automatic recovery from location errors
+    this.setupLocationErrorHandling();
+  }
+
+  private setupLocationErrorHandling(): void {
+    // Clean up any existing subscription
+    if (this.locationErrorSubscription) {
+      this.locationErrorSubscription.unsubscribe();
+      this.locationErrorSubscription = null;
+    }
+    
+    // Set up periodic check for location recovery when location error is active
+    this.locationErrorSubscription = interval(10000) // Check every 10 seconds
+      .pipe(
+        takeUntil(this.componentDestroyed$)
+      )
+      .subscribe(() => {
+        if (this.hasLocationError) {
+          console.log('Attempting to recover location access...');
+          // Try to restart the location tracking
+          this.locationService.retryLocationAccess();
+        } else {
+          // If we somehow still have this subscription active but no error,
+          // clean it up to avoid unnecessary retries
+          console.log('Location recovery subscription active but no error, cleaning up');
+          if (this.locationErrorSubscription) {
+            this.locationErrorSubscription.unsubscribe();
+            this.locationErrorSubscription = null;
+          }
+        }
+      });
   }
   
   private fetchAndDisplayNearbySteige(coordinates: Coordinates): Observable<void> {

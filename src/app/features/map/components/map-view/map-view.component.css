@@ -43,7 +43,7 @@
   color: #333;
 }
 
-/* Error overlay styles */
+/* Error overlay styles - original, kept for reference */
 .error-overlay {
   position: absolute;
   top: 50%;
@@ -66,6 +66,36 @@
   width: 48px;
   margin-bottom: 8px;
   color: #f44336;
+}
+
+/* New location alert banner styles */
+.location-alert {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  background-color: rgba(33, 33, 33, 0.85);
+  color: white;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  max-width: 90%;
+  backdrop-filter: blur(4px);
+}
+
+.location-alert-icon {
+  font-size: 20px;
+  height: 20px;
+  width: 20px;
+  min-width: 20px; /* Prevent shrinking */
+  margin-right: 10px;
+  color: #FF9800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Map controls styles */
