@@ -1,7 +1,27 @@
 import { Injectable, NgZone, inject } from '@angular/core'; // Added NgZone, inject
-import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http'; // Added HttpHeaders
-import { Observable, of, switchMap, catchError, tap } from 'rxjs'; // Added needed operators
-import { NearbySteig, MonitorApiResponse } from '@shared-types/api-models';
+import { HttpClient, HttpParams, HttpHeaders, HttpResponse } from '@angular/common/http'; // Added HttpHeaders
+import { Observable, of, switchMap, catchError, tap, map } from 'rxjs'; // Added needed operators
+import { NearbySteig } from '@shared-types/api-models';
+
+// Enhanced MonitorApiResponse with ETag and status support
+export interface MonitorApiResponse {
+  data?: { 
+    monitors: Array<{
+      locationStop?: any;
+      lines?: Array<any>;
+      attributes?: any;
+    }>
+  };
+  message?: { 
+    value: string; 
+    messageCode: number; 
+    serverTime: string 
+  };
+  errorOccurred?: boolean;
+  timestamp: number;
+  headers?: { etag?: string | null };
+  status?: number;
+}
 import { SessionService } from './session.service'; // Import SessionService
 import * as CryptoJS from 'crypto-js'; // For HMAC signing
 
@@ -115,9 +135,10 @@ export class ApiService {
   /**
    * Fetches real-time departure data from the Wiener Linien OGD API via our optimized monitor endpoint.
    * @param divaIds An array of DIVA numbers for the stations.
+   * @param customHeaders Optional custom headers to include (for ETag support).
    * @returns Observable with real-time monitor data.
    */
-  getRealTimeDepartures(divaIds: (string | number)[]): Observable<MonitorApiResponse> {
+  getRealTimeDepartures(divaIds: (string | number)[], customHeaders?: Record<string, string>): Observable<MonitorApiResponse> {
     if (!divaIds || divaIds.length === 0) {
       // Return an Observable of a valid MonitorApiResponse with empty monitors
       return of({ 
@@ -129,15 +150,39 @@ export class ApiService {
 
     // Convert all divaIds to strings for consistency
     const normalizedDivaIds = divaIds.map(diva => diva.toString());
+    
+    // Set up headers if provided
+    let options = {};
+    if (customHeaders) {
+      options = {
+        headers: new HttpHeaders(customHeaders),
+        observe: 'response' as const // Get full response to access headers
+      };
+    }
 
     // Use POST request with the divaIds in the request body
-    return this.http.post<MonitorApiResponse>('/api/routes/monitor', { divaIds: normalizedDivaIds }).pipe(
+    return this.http.post<any>('/api/routes/monitor', { divaIds: normalizedDivaIds }, options).pipe(
+      // Map the response to extract data and headers
+      map((response: HttpResponse<MonitorApiResponse> | MonitorApiResponse) => {
+        // If we get a full response with headers (when customHeaders is provided)
+        if (response && 'body' in response) {
+          // Extract ETag and add status code for 304 detection
+          const result = response.body as MonitorApiResponse;
+          result.headers = {
+            etag: response.headers.get('ETag')
+          };
+          result.status = response.status;
+          return result;
+        }
+        // Regular response (no custom headers were provided)
+        return response as MonitorApiResponse;
+      }),
       tap((response: MonitorApiResponse) => {
         console.log(`[API] Received monitor data with ${response.data?.monitors?.length || 0} stations`);
       }),
       catchError(error => {
         console.error('Error fetching real-time departures:', error);
-        return of({
+        const errorResponse: MonitorApiResponse = {
           data: { monitors: [] },
           message: { 
             value: 'Error fetching real-time departures', 
@@ -146,7 +191,8 @@ export class ApiService {
           },
           errorOccurred: true,
           timestamp: Date.now()
-        } as MonitorApiResponse);
+        };
+        return of(errorResponse);
       })
     );
   }
@@ -163,15 +209,19 @@ export class ApiService {
     
     return this.http.post<MonitorApiResponse>('/api/routes/monitor', { divaIds: normalizedDivaIds }).pipe(
       catchError(error => {
-        console.error('Error fetching throttled monitor data:', error);
-        
+        console.error('Error fetching monitor data:', error);
         // Return an error response that the UI can handle
-        return of({
+        const errorResponse: MonitorApiResponse = {
+          data: { monitors: [] },
+          message: { 
+            value: 'Error fetching monitor data', 
+            messageCode: 0, 
+            serverTime: new Date().toISOString() 
+          },
           errorOccurred: true,
-          timestamp: Date.now(),
-          data: null,
-          message: error.message || 'Unknown error occurred'
-        } as MonitorApiResponse);
+          timestamp: Date.now()
+        };
+        return of(errorResponse);
       })
     );
   }
