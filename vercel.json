@@ -11,8 +11,25 @@
       }
     },
     {
+      "src": "api/routes/monitor.ts",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 60
+      }
+    },
+    {
+      "src": "api/routes/walking-matrix.ts",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
+    },
+    {
       "src": "api/**/*.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 15
+      }
     }
   ],
   "rewrites": [

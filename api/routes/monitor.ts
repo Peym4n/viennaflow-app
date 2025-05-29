@@ -581,8 +581,18 @@ export default async function handler(req: Request, res: Response) {
 
 async function fetchFromWienerLinien(divaIds: string[]): Promise<MonitorApiResponse> {
   try {
+    // Set to track which DIVA IDs we successfully fetched and cached
+    const fetchedDivaIds = new Set<string>();
+    
     console.log('[API Handler] Fetching from Wiener Linien:', 
       `https://www.wienerlinien.at/ogd_realtime/monitor?${divaIds.map(id => `diva=${id}`).join('&')}`);
+    
+    // Update the fetching status to indicate we're in progress
+    await redis.set(FETCHING_STATUS_KEY, JSON.stringify({
+      status: 'fetching',
+      requestedDivaIds: divaIds,
+      timestamp: Date.now()
+    }), { ex: 60 }); // 60 second expiry as safety measure
     
     // Wiener Linien API uses diva parameter
     const url = `https://www.wienerlinien.at/ogd_realtime/monitor?${divaIds.map(id => `diva=${id}`).join('&')}`;
@@ -698,7 +708,25 @@ async function fetchFromWienerLinien(divaIds: string[]): Promise<MonitorApiRespo
       
       // Use the grouped monitors for the response
       processedMonitors = Array.from(groupedByStation.values());
+
+      // Cache each individual station monitor by DIVA ID
+      // This is the missing piece that allows individual station caching
+      for (const [stationId, monitor] of groupedByStation.entries()) {
+        const stationCacheKey = `monitor:station:${stationId}`;
+        console.log(`[API Handler] Caching station data for DIVA ${stationId}`);
+        await redis.set(stationCacheKey, monitor, { ex: 60 }); // Cache for 60 seconds
+        
+        // Add this DIVA ID to our set of fetched DIVAs
+        fetchedDivaIds.add(stationId);
+      }
     }
+    
+    // Update the fetching status to indicate completion
+    await redis.set(FETCHING_STATUS_KEY, JSON.stringify({
+      status: 'done',
+      fetchedDivaIds: Array.from(fetchedDivaIds),
+      timestamp: Date.now()
+    }), { ex: 10 }); // 10 second expiry as safety measure
     
     console.log(`[API Handler] After filtering: ${processedMonitors.length} monitors with metro lines`);
     
