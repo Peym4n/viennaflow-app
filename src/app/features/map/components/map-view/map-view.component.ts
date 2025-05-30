@@ -128,18 +128,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       // If polling was paused in background mode, restart it
       if (wasPollingPaused && this.activeDivaMapForPolling.size > 0) {
         console.log('[MapView] Restarting polling after background pause');
-        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling);
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
         return;
       }
 
       // If the interval has changed, restart polling to use the new interval
-      if (previousInterval !== this.pollingIntervalMs && this.activeDivaMapForPolling.size > 0 && this.pollingSubscription) {
+      if (previousInterval !== this.pollingIntervalMs && this.activeDivaMapForPolling.size > 0) {
         console.log(`[MapView] Polling interval changed from ${previousInterval / 1000}s to ${this.pollingIntervalMs / 1000}s, restarting polling`);
         if (this.pollingSubscription) {
           this.pollingSubscription.unsubscribe();
           this.pollingSubscription = undefined;
         }
-        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling);
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
       }
     }
   };
@@ -168,9 +168,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       
       // Check if polling is inactive but should be active
       if (this.activeDivaMapForPolling.size > 0 && 
-          (!this.pollingSubscription || this.pollingSubscription.closed)) {
+          (this.pollingSubscription === undefined || 
+           this.pollingPausedInBackground || 
+           (this.pollingSubscription && this.pollingSubscription.closed))) {
         console.log('[MapView] Restarting polling subscription after returning to foreground');
-        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling);
+        this.pollingPausedInBackground = false; // Reset the flag
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
         return; // updateMonitoredStationsAndPoll already calls updatePollingInterval
       }
     }
@@ -501,11 +504,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>): void {
+  private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>, forceRestart: boolean = false): void {
     const newDivaValues = Array.from(divaMapToUpdate.values());
     const newPollingKey = newDivaValues.sort().join(',');
 
-    if (this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
+    if (!forceRestart && this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
       console.log('[MapView] Monitored DIVAs unchanged, polling continues for key:', newPollingKey);
       return;
     }
