@@ -483,7 +483,21 @@ export default async function handler(req: Request, res: Response) {
         const cachedStation = await redis.get(stationCacheKey);
               
         if (cachedStation) {
-          cachedMonitors.push(cachedStation);
+          // Check if this DIVA ID is already included in the cachedMonitors array
+          const stationDivaId = extractDivaFromMonitor(cachedStation);
+          const stationAlreadyIncluded = cachedMonitors.some(existingMonitor => {
+            const existingDivaId = extractDivaFromMonitor(existingMonitor);
+            return existingDivaId === stationDivaId;
+          });
+          
+          // Only add if not already included
+          if (!stationAlreadyIncluded && stationDivaId) {
+            console.log(`[API Handler] Adding cached station with DIVA ID: ${stationDivaId}`);
+            cachedMonitors.push(cachedStation);
+          } else if (stationAlreadyIncluded) {
+            console.log(`[API Handler] Skipping duplicate station with DIVA ID: ${stationDivaId}`);
+          }
+          
           missingDivaIds.splice(missingDivaIds.indexOf(divaId), 1);
         } else {
           allFound = false;
@@ -669,6 +683,7 @@ async function fetchFromWienerLinien(divaIds: string[]): Promise<MonitorApiRespo
                   ...line.departures,
                   departure: line.departures.departure.slice(0, 3)
                 };
+                console.log('Updated departures data:', JSON.stringify(updatedDeparturesData, null, 2));
               }
               return {
                 ...line,
@@ -681,6 +696,8 @@ async function fetchFromWienerLinien(divaIds: string[]): Promise<MonitorApiRespo
           lines: linesWithLimitedDepartures
         };
       }).filter((monitor: any) => monitor.lines && monitor.lines.length > 0);
+
+      console.log('Processed monitors:', JSON.stringify(processedMonitors, null, 2));
 
       // Step 2: Group monitors by station ID (diva)
       const groupedByStation = new Map<string, Monitor>();
