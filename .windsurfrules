@@ -58,3 +58,35 @@
 - Write comments in English generally across the project
 - Write comments in German if the file already contains other German comments
 - The getStops.js file contains German comments, so new comments there should also be in German
+
+## Recent Architectural Changes (Walking Time Feature - May 2025)
+
+### Secure Backend API for Walking Times
+- **Google Distance Matrix API Call Moved to Backend:**
+    - The calculation of walking durations from the user's location to nearby stations is now handled by a Vercel serverless function: `/api/routes/walking-matrix.ts`.
+    - This function uses a dedicated, server-side Google API key (`GOOGLE_MAPS_SERVER_API_KEY`), enhancing security by not exposing this key on the client.
+- **HMAC-Secured Endpoint:**
+    - The `/api/routes/walking-matrix.ts` endpoint is protected using session-based HMAC-SHA256 request signing.
+
+### Client-Side Integration for Secure API Calls
+- **`SessionService` (New - `src/app/core/services/session.service.ts`):**
+    - Manages the client-side part of the session: calls `/api/session/init` to obtain and store the `sessionSigningKey` in memory.
+    - Provides `ensureSessionSigningKey()` to components/services needing to make signed requests.
+- **`ApiService` (`src/app/core/services/api.service.ts`):**
+    - Added `getSecureWalkingMatrix(payload)` method.
+    - This method uses `SessionService` to get the `sessionSigningKey`.
+    - It constructs the message to sign (timestamp + payload) and generates an HMAC-SHA256 signature using `crypto-js`.
+    - Sends a POST request to the secure `/api/routes/walking-matrix` backend endpoint with the payload and signature headers.
+- **`GoogleMapsService` (`src/app/core/services/google-maps.service.ts`):**
+    - Updated to load the Google Maps `geometry` library, enabling client-side distance calculations (used for the user movement detection feature).
+- **`MapViewComponent` (`src/app/features/map/components/map-view/map-view.component.ts`):**
+    - The `fetchAndStoreWalkingTimes` method now calls `apiService.getSecureWalkingMatrix()` for walking time data.
+    - Implements periodic updates for walking times:
+        - Fetched when the set of monitored stations changes.
+        - Fetched every 1 minute if the user has moved more than 50 meters since the last calculation for the current set of stations.
+    - `lastWalkingTimeUpdateLocation` property tracks the user's location at the time of the last successful walking time API call.
+    - Walking duration is displayed in overlays as `X'` (e.g., "10'") next to the station name, including a "directions_walk" icon.
+    - Status message in overlays updated to "No departure data found!" when specific monitor data is missing.
+
+### `vercel.json` Configuration
+- Updated `rewrites` to improve routing for API calls and SPA fallback, particularly for the `vercel dev` environment. The current configuration aims to map API paths like `/api/some/path` to `/api/some/path.ts` if no extension is present, and includes a robust SPA fallback that excludes common static asset and API paths. (Note: Local `vercel dev` routing behavior for API functions remains an area of ongoing troubleshooting).

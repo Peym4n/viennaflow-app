@@ -112,6 +112,10 @@ export interface MonitorMessage {
 }
 
 export interface MonitorApiResponse {
-  data: MonitorData;
-  message: MonitorMessage;
+  data: MonitorData | null;
+  message: MonitorMessage | string;
+  // Additional fields for the long-polling implementation
+  errorOccurred?: boolean;
+  timestamp?: number;
+  error?: string;
 }

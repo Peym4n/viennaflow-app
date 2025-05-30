@@ -17,15 +17,11 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path((?!.*\\.).[^/]+)", 
+      "source": "/api/:path((?!.+\\.[^/]+$)[^?]+)",
       "destination": "/api/:path.ts"
     },
     {
-      "source": "/api/(.*)", 
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/|_next/|favicon.ico|assets/).*)",
       "destination": "/index.html"
     }
   ]
