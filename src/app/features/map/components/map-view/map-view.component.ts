@@ -61,7 +61,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private pollingSubscription?: Subscription;
   private activeDivaMapForPolling = new Map<number, string | number>(); // Stores current DIVAs for polling
   private currentPollingDivasKey: string = ''; // Stringified key of current DIVAs for polling
-  private readonly pollingIntervalMs = 15000; // 15 seconds
   private stopPolling$ = new Subject<void>();
   private lastMonitorResponse: MonitorApiResponse | null = null; // Store last successful response
   private stationWalkingTimes = new Map<number, number>(); // stationId -> walking duration in minutes
@@ -69,6 +68,81 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private walkingTimeUpdateSubscription: Subscription | null = null;
   private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 60000; // 1 minute
   private readonly MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M = 50; // 50 meters
+  
+  // Adaptive polling settings
+  private isActivelyViewing = true; // Assume active by default
+  private enableBatteryOptimization = true; // Default to battery saving mode
+  private pollingIntervalMs = 15000; // Default polling interval (15 seconds)
+  private readonly DEFAULT_ACTIVE_POLLING_MS = 15000; // 15 seconds when actively viewing
+  private readonly DEFAULT_INACTIVE_POLLING_MS = 60000; // 60 seconds when not actively viewing
+  private readonly NEARBY_STATION_POLLING_MS = 5000; // 5 seconds when near a station with imminent departure
+  private readonly NEARBY_THRESHOLD_MINUTES = 5; // Consider "nearby" if within 5 minutes walking distance
+  private pollingPausedInBackground = false; // Track if polling was paused due to background mode
+  
+  // For ETag handling
+  private lastETag: string | null = null;
+  
+  /**
+   * Updates the polling interval based on user context:
+   * 1. When app is not visible: use longer interval (60s) or pause polling if battery optimization is enabled
+   * 2. When app is visible but not near stations: use standard interval (15s)
+   * 3. When near stations with imminent departures: use shorter interval (5s)
+   */
+  private updatePollingInterval = (): void => {
+    const previousInterval = this.pollingIntervalMs;
+    const wasPollingPaused = this.pollingPausedInBackground;
+    
+    // Handle background mode with battery optimization
+    if (!this.isActivelyViewing && this.enableBatteryOptimization) {
+      // If we're moving to background mode and battery optimization is enabled, pause polling
+      if (this.pollingSubscription && !this.pollingSubscription.closed) {
+        console.log('[MapView] Pausing polling due to background mode with battery optimization enabled');
+        if (this.pollingSubscription) {
+          this.pollingSubscription.unsubscribe();
+          this.pollingSubscription = undefined;
+        }
+        this.pollingPausedInBackground = true;
+        return; // Exit early, we're pausing polling
+      }
+    } else {
+      // We're in foreground or battery optimization is disabled
+      this.pollingPausedInBackground = false;
+      
+      // Start with base interval depending on whether app is in foreground/background
+      this.pollingIntervalMs = this.isActivelyViewing ? 
+        this.DEFAULT_ACTIVE_POLLING_MS : 
+        this.DEFAULT_INACTIVE_POLLING_MS;
+      
+      // If user is within walking distance of a station, increase polling frequency
+      if (this.isActivelyViewing && this.stationWalkingTimes.size > 0) {
+        // Check if any station is within the NEARBY_THRESHOLD_MINUTES walking distance
+        const isNearStation = Array.from(this.stationWalkingTimes.values())
+          .some(walkingMinutes => walkingMinutes <= this.NEARBY_THRESHOLD_MINUTES);
+        
+        if (isNearStation) {
+          console.log(`[MapView] User is near a station, using fast polling interval (${this.NEARBY_STATION_POLLING_MS / 1000}s)`);
+          this.pollingIntervalMs = this.NEARBY_STATION_POLLING_MS;
+        }
+      }
+
+      // If polling was paused in background mode, restart it
+      if (wasPollingPaused && this.activeDivaMapForPolling.size > 0) {
+        console.log('[MapView] Restarting polling after background pause');
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
+        return;
+      }
+
+      // If the interval has changed, restart polling to use the new interval
+      if (previousInterval !== this.pollingIntervalMs && this.activeDivaMapForPolling.size > 0) {
+        console.log(`[MapView] Polling interval changed from ${previousInterval / 1000}s to ${this.pollingIntervalMs / 1000}s, restarting polling`);
+        if (this.pollingSubscription) {
+          this.pollingSubscription.unsubscribe();
+          this.pollingSubscription = undefined;
+        }
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
+      }
+    }
+  };
 
 
   isLoading = true;
@@ -82,7 +156,36 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private apiService = inject(ApiService);
   private locationService = inject(LocationService);
   
-  constructor() {}
+  // Declare the visibility change handler as a property to avoid TypeScript errors
+  private handleVisibilityChange = (): void => {
+    const wasActive = this.isActivelyViewing;
+    this.isActivelyViewing = document.visibilityState === 'visible';
+    console.log(`[MapView] Visibility changed: User is ${this.isActivelyViewing ? 'actively viewing' : 'not viewing'} the app`);
+    
+    if (!wasActive && this.isActivelyViewing) {
+      // Coming back to foreground from background
+      console.log('[MapView] App returning to foreground, ensuring polling is active');
+      
+      // Check if polling is inactive but should be active
+      if (this.activeDivaMapForPolling.size > 0 && 
+          (this.pollingSubscription === undefined || 
+           this.pollingPausedInBackground || 
+           (this.pollingSubscription && this.pollingSubscription.closed))) {
+        console.log('[MapView] Restarting polling subscription after returning to foreground');
+        this.pollingPausedInBackground = false; // Reset the flag
+        this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, true); // Force restart
+        return; // updateMonitoredStationsAndPoll already calls updatePollingInterval
+      }
+    }
+    
+    // In all other cases, just update the interval
+    this.updatePollingInterval();
+  };
+  
+  constructor() {
+    // Set up visibility change detection for adaptive polling
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+  }
   
   ngOnInit(): void {
     this.mediaQueryList = window.matchMedia('(max-width: 599px)');
@@ -141,6 +244,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.clearMetroLines();
     this.clearStationMarkers();
+
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
   }
   
   private initializeMapWhenReady(): void {
@@ -399,11 +504,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>): void {
+  private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>, forceRestart: boolean = false): void {
     const newDivaValues = Array.from(divaMapToUpdate.values());
     const newPollingKey = newDivaValues.sort().join(',');
 
-    if (this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
+    if (!forceRestart && this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
       console.log('[MapView] Monitored DIVAs unchanged, polling continues for key:', newPollingKey);
       return;
     }
@@ -419,6 +524,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     
     this.currentPollingDivasKey = newPollingKey;
     this.activeDivaMapForPolling = new Map(divaMapToUpdate);
+    
+    // Reset ETag when polling targets change
+    this.lastETag = null;
 
     if (newDivaValues.length === 0) {
       console.log('[MapView] No DIVAs to monitor. Clearing overlays and stopping poll.');
@@ -460,6 +568,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     
+    // Determine optimal polling interval based on context
+    this.updatePollingInterval();
+    
+    console.log(`[MapView] Setting up polling with interval: ${this.pollingIntervalMs}ms (${this.pollingIntervalMs / 1000}s)`);
+    
     this.pollingSubscription = timer(0, this.pollingIntervalMs).pipe(
       takeUntil(this.stopPolling$),
       exhaustMap(() => {
@@ -467,14 +580,37 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             this.clearHighlightsAndOverlays(); 
             this.createOverlaysForStations(this.activeDivaMapForPolling, null); 
         }
+        
+        // Update polling interval before each request
+        this.updatePollingInterval();
+        
         console.log('[MapView] Fetching real-time data for stations:', newDivaValues);
-        return this.apiService.getRealTimeDepartures(newDivaValues).pipe(
-          tap((response: MonitorApiResponse | null) => {
+        
+        // Include ETag header if available to support 304 Not Modified responses
+        const headers: Record<string, string> = {};
+        if (this.lastETag) {
+          headers['If-None-Match'] = this.lastETag;
+        }
+        
+        return this.apiService.getRealTimeDepartures(newDivaValues, headers).pipe(
+          tap((response: any) => {
+            // Check if this is a 304 Not Modified response
+            if (response && response.status === 304) {
+              console.log(`[MapView] Received 304 Not Modified - using cached data`);
+              return;
+            }
+            
+            // Store ETag if present in the response
+            if (response && response.headers && response.headers.etag) {
+              this.lastETag = response.headers.etag;
+              console.log(`[MapView] Stored new ETag: ${this.lastETag}`);
+            }
+            
             if (response && response.data?.monitors) {
               console.log(`[MapView] Received monitor data with ${response.data.monitors.length} station groups`);
               // Log the metro lines received for debugging
               let metroLineCount = 0;
-              response.data.monitors.forEach(monitor => {
+              response.data.monitors.forEach((monitor: { lines?: Array<any> }) => {
                 if (monitor.lines) {
                   metroLineCount += monitor.lines.length;
                 }
@@ -492,6 +628,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         );
       })
     ).subscribe((monitorResponse: MonitorApiResponse | null) => {
+      // If we received a 304 Not Modified, use the existing data
+      if ((monitorResponse as any)?.status === 304) {
+        console.log('[MapView] Using cached data (304 Not Modified)');
+        return;
+      }
+      
       this.clearHighlightsAndOverlays(); 
       if (monitorResponse && !(monitorResponse as any).errorOccurred) {
         this.lastMonitorResponse = monitorResponse;
@@ -499,6 +641,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         this.lastMonitorResponse = monitorResponse; 
       }
       this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
+      
+      // After new data arrives, update the polling interval again
+      this.updatePollingInterval();
     });
 
     this.setupWalkingTimeUpdateTimer();
