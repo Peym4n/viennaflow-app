@@ -2865,7 +2865,7 @@
             "type": "Feature",
             "geometry": {
               "type": "Point",
-              "coordinates": [16.2609737, 48.1970037]
+              "coordinates": [16.2607384, 48.1969925]
             },
             "properties": {
               "haltestellen_id": 1085617412,
