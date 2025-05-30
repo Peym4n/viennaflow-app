@@ -369,7 +369,7 @@
             "type": "Feature",
             "geometry": {
               "type": "Point",
-              "coordinates": [16.3766123, 48.1781614]
+              "coordinates": [16.376197, 48.179197]
             },
             "properties": {
               "haltestellen_id": 1085618110,
@@ -1794,7 +1794,7 @@
             "type": "Feature",
             "geometry": {
               "type": "Point",
-              "coordinates": [16.3453706, 48.1969554]
+              "coordinates": [16.3453765, 48.1969398]
             },
             "properties": {
               "haltestellen_id": 1085623055,
@@ -1807,7 +1807,7 @@
             "type": "Feature",
             "geometry": {
               "type": "Point",
-              "coordinates": [16.3501956, 48.1983046]
+              "coordinates": [16.3501834, 48.198319]
             },
             "properties": {
               "haltestellen_id": 1085614906,
@@ -1865,7 +1865,7 @@
             "type": "Feature",
             "geometry": {
               "type": "Point",
-              "coordinates": [16.3802508, 48.2068653]
+              "coordinates": [16.3802054, 48.206819]
             },
             "properties": {
               "haltestellen_id": 1085614229,
