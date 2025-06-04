@@ -105,7 +105,7 @@ export default async function handler(
     }
 
     const processedAndFilteredData: NearbySteig[] = rawData
-      .map((item: RawNearbySteig) => {
+      .map((item: RawNearbySteig): NearbySteig => {
         let parsedLocation: GeoJsonPoint;
         try {
           if (typeof item.location !== 'string') {
@@ -116,10 +116,19 @@ export default async function handler(
           console.error("Failed to parse location string:", item.location, parseError);
           parsedLocation = { type: "Point", coordinates: [0, 0] }; // Default/error state
         }
+
+        const fkLinienIdNum = typeof item.fk_linien_id === 'string' ? parseInt(item.fk_linien_id, 10) : item.fk_linien_id;
+
+        // Destructure item to separate transformed properties from the rest
+        // Expect 'haltestellen_diva' (plural) from RawNearbySteig (item)
+        const { location, fk_linien_id, haltestellen_diva, ...restOfItem } = item;
+
         return {
-          ...item,
+          ...restOfItem,
           location: parsedLocation,
-          fk_linien_id: typeof item.fk_linien_id === 'string' ? parseInt(item.fk_linien_id, 10) : item.fk_linien_id,
+          fk_linien_id: fkLinienIdNum,
+          // Use haltestellen_diva consistently, converting null to 0
+          haltestellen_diva: haltestellen_diva == null ? 0 : haltestellen_diva,
         };
       })
       .filter((steig: NearbySteig) => {

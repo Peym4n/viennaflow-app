@@ -407,15 +407,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           if (this.previousUserLocation) {
             const distance = google.maps.geometry.spherical.computeDistanceBetween(this.previousUserLocation, newUserLatLng);
             if (distance > 1000) { // More than 1 km
-              console.log(`[MapView] Large location jump detected (${Math.round(distance)}m). Recenter map with panTo.`);
+              console.log(`[MapView] Large location jump detected (${Math.round(distance)}m). Recenter map with panTo, deferring zoom and Steige fetch.`);
               this.map.panTo(newUserLatLng); // Use panTo for smooth animation
-              this.map.setZoom(15); // Reset zoom on significant jump
-              // Re-fetch nearby Steige for the new center
-              this.fetchAndDisplayNearbySteige(coordinates)
-                .pipe(takeUntil(this.componentDestroyed$))
-                .subscribe({
-                  error: (err) => console.error('[MapView] Error fetching nearby Steige after large jump:', err)
-                });
+
+              // Listen for the next 'idle' event to set zoom AND fetch Steige AFTER panTo animation finishes
+              google.maps.event.addListenerOnce(this.map, 'idle', () => {
+                console.log('[MapView] panTo animation complete. Setting zoom to 15 and fetching nearby Steige.');
+                this.map.setZoom(15); // Reset zoom on significant jump
+                
+                // Re-fetch nearby Steige for the new center
+                this.fetchAndDisplayNearbySteige(coordinates)
+                  .pipe(takeUntil(this.componentDestroyed$))
+                  .subscribe({
+                    error: (err) => console.error('[MapView] Error fetching nearby Steige after large jump and pan:', err)
+                  });
+              });
             }
           }
         }
@@ -535,11 +541,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
         const uniqueHaltestellenDivaMap = new Map<number, string | number>();
         steige.forEach(s => {
-          if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number') {
-            const stationData = this.stationMarkerMap.get(s.fk_haltestellen_id);
-            if (stationData?.diva && !uniqueHaltestellenDivaMap.has(s.fk_haltestellen_id)) {
-              uniqueHaltestellenDivaMap.set(s.fk_haltestellen_id, stationData.diva);
+          // Use haltestellen_diva directly from the NearbySteig object
+          if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number' && s.haltestellen_diva) {
+            if (!uniqueHaltestellenDivaMap.has(s.fk_haltestellen_id)) {
+              uniqueHaltestellenDivaMap.set(s.fk_haltestellen_id, s.haltestellen_diva);
             }
+          } else if (s.fk_haltestellen_id && typeof s.fk_haltestellen_id === 'number' && !s.haltestellen_diva) {
+            // Log a warning if a Steig is processed that should have a DIVA ID but doesn't
+            console.warn(`[MapView] NearbySteig for Haltestelle ID ${s.fk_haltestellen_id} (Steig ID: ${s.steig_id}) is missing 'haltestellen_diva'. This Steig will not be monitored for real-time data.`);
           }
         });
 

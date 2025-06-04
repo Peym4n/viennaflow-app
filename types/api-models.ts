@@ -14,6 +14,7 @@ export interface RawNearbySteig {
   linien_bezeichnung: string;
   fk_haltestellen_id: number;
   haltestellen_name: string;
+  haltestellen_diva: number | null;
   richtung: string;
   rbl_nummer: number | null;
   // Location is initially a string (e.g., from DB or raw API response)
@@ -22,9 +23,11 @@ export interface RawNearbySteig {
 
 // This type represents the Steig data after the location string has been parsed into an object
 // and fk_linien_id has been ensured to be a number.
-export interface NearbySteig extends Omit<RawNearbySteig, 'location' | 'fk_linien_id'> {
+// NearbySteig now directly uses haltestellen_diva from RawNearbySteig, but typed as number after processing.
+export interface NearbySteig extends Omit<RawNearbySteig, 'location' | 'fk_linien_id' | 'haltestellen_diva'> {
   location: GeoJsonPoint;
   fk_linien_id: number; // Ensure fk_linien_id is a number in the processed type
+  haltestellen_diva: number; // Standardized to plural, type is number after processing nulls
 }
 
 // Interfaces for Wiener Linien Monitor API
