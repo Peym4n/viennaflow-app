@@ -7,6 +7,7 @@ export interface ICustomMapOverlay {
   show(): void;
   hide(): void;
   destroy(): void; // Method to clean up and remove the overlay
+  getDiv(): HTMLDivElement | undefined; // Method to access the overlay's div element
   // Add other methods as needed
 }
 
@@ -152,6 +153,10 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
     destroy() {
       console.log('[CustomMapOverlay] destroy called.', this.div);
       this.setMap(null);
+    }
+
+    getDiv(): HTMLDivElement | undefined {
+      return this.div;
     }
   }
   return CustomMapOverlayInternal;

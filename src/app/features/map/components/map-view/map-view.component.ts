@@ -51,11 +51,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private componentDestroyed$ = new Subject<void>();
   
   private stationMarkerMap = new Map<number, { marker: google.maps.Marker, diva?: number | string }>();
-  private highlightedStationIds = new Set<number>(); // May still be useful for tracking which stations *should* be highlighted
-  private highlightedStationOverlays: ICustomMapOverlay[] = [];
-  private highlightMarkers: google.maps.Marker[] = []; // For "always shown" highlight markers
+  private highlightedStationIds = new Set<number>(); // Tracks stations that have a highlight marker and/or overlay
+  
+  // For nearby stations (from activeDivaMapForPolling)
+  private nearbyStationOverlays: ICustomMapOverlay[] = [];
+  private nearbyStationHighlightMarkers: google.maps.Marker[] = [];
+  
+  // For the single clicked station (not in activeDivaMapForPolling)
+  private clickedStationHighlightMarker: google.maps.Marker | null = null;
   private CustomMapOverlayCtor!: CustomMapOverlayConstructor;
   private lineStopsData: LineStopsResponse | null = null; // To store line data for filtering
+  
+  // Track the currently clicked station (only one at a time)
+  private clickedStationId: number | null = null;
+  private clickedStationDiva: string | number | null = null;
+  private clickedStationOverlay: ICustomMapOverlay | null = null;
 
   // For Polling
   private pollingSubscription?: Subscription;
@@ -227,8 +237,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.activeInfoWindow.close();
       this.activeInfoWindow = null;
     }
-    this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
-    this.highlightedStationOverlays = [];
+    this.nearbyStationOverlays.forEach(overlay => overlay.destroy());
+    this.nearbyStationOverlays = [];
+    this.nearbyStationHighlightMarkers.forEach(marker => marker.setMap(null));
+    this.nearbyStationHighlightMarkers = [];
+    if (this.clickedStationOverlay) {
+      this.clickedStationOverlay.destroy();
+      this.clickedStationOverlay = null;
+    }
+    if (this.clickedStationHighlightMarker) {
+        this.clickedStationHighlightMarker.setMap(null);
+        this.clickedStationHighlightMarker = null;
+    }
 
     this.stopPolling$.next(); 
     this.stopPolling$.complete();
@@ -505,8 +525,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>, forceRestart: boolean = false): void {
-    const newDivaValues = Array.from(divaMapToUpdate.values());
-    const newPollingKey = newDivaValues.sort().join(',');
+    // Combine nearby stations with the clicked station (if any)
+    const combinedDivaMap = new Map<number, string | number>([...divaMapToUpdate]);
+    
+    // Add clicked station to the polling request if one exists
+    if (this.clickedStationId !== null && this.clickedStationDiva !== null) {
+      combinedDivaMap.set(this.clickedStationId, this.clickedStationDiva);
+    }
+    
+    const newDivaValues = Array.from(combinedDivaMap.values());
+    const newPollingKey = this.generatePollingKey(combinedDivaMap);
 
     if (!forceRestart && this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
       console.log('[MapView] Monitored DIVAs unchanged, polling continues for key:', newPollingKey);
@@ -520,6 +548,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.walkingTimeUpdateSubscription) { 
         this.walkingTimeUpdateSubscription.unsubscribe();
         console.log('[MapView] Stopped previous walking time timer due to DIVA set change.');
+    }
+    // Check if the set of *nearby* stations (excluding the clicked one) has changed
+    const oldNearbyPollingKey = this.generatePollingKey(this.activeDivaMapForPolling);
+    const newNearbyPollingKey = this.generatePollingKey(divaMapToUpdate);
+
+    if (forceRestart || oldNearbyPollingKey !== newNearbyPollingKey) {
+      console.log('[MapView] Nearby station set changed or forceRestart. Clearing nearby overlays.');
+      this.clearHighlightsAndOverlays('nearby');
     }
     
     this.currentPollingDivasKey = newPollingKey;
@@ -535,7 +571,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     console.log(`[MapView] Starting new data fetch for DIVAs: ${newDivaValues.join(', ')}`);
-    this.clearHighlightsAndOverlays(); 
+    // Selective clearing of 'nearby' is done above. Clicked station is handled by its own logic.
+    // The full clear within the polling subscription (later in this method) will handle refresh on new data.
 
     const userLocation = this.userMarker ? this.userMarker.getPosition() : null;
     let userLocationLiteral: google.maps.LatLngLiteral | null = null;
@@ -562,7 +599,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.stationWalkingTimes.clear();
       this.lastWalkingTimeUpdateLocation = null;
-      if (this.highlightMarkers.length > 0 || this.highlightedStationOverlays.length > 0) {
+      if ((this.nearbyStationHighlightMarkers.length > 0 || this.clickedStationHighlightMarker) || (this.nearbyStationOverlays.length > 0 || this.clickedStationOverlay)) {
           this.clearHighlightsAndOverlays();
           this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
       }
@@ -576,7 +613,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.pollingSubscription = timer(0, this.pollingIntervalMs).pipe(
       takeUntil(this.stopPolling$),
       exhaustMap(() => {
-        if (!this.lastMonitorResponse && this.highlightMarkers.length === 0 && this.activeDivaMapForPolling.size > 0) {
+        if (!this.lastMonitorResponse && this.nearbyStationHighlightMarkers.length === 0 && !this.clickedStationHighlightMarker && this.activeDivaMapForPolling.size > 0) {
             this.clearHighlightsAndOverlays(); 
             this.createOverlaysForStations(this.activeDivaMapForPolling, null); 
         }
@@ -763,22 +800,46 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       });
   }
 
-  private clearHighlightsAndOverlays(): void {
-    console.log('[MapView] Clearing old highlightMarkers. Count:', this.highlightMarkers.length);
-    this.highlightMarkers.forEach(marker => marker.setMap(null));
-    this.highlightMarkers = [];
+  private clearHighlightsAndOverlays(scope: 'all' | 'nearby' | 'clicked' = 'all'): void {
+    if (scope === 'all' || scope === 'nearby') {
+      console.log('[MapView] Clearing nearby station highlights and overlays. Count:', this.nearbyStationHighlightMarkers.length);
+      this.nearbyStationHighlightMarkers.forEach(marker => marker.setMap(null));
+      this.nearbyStationHighlightMarkers = [];
+      this.nearbyStationOverlays.forEach(overlay => overlay.destroy());
+      this.nearbyStationOverlays = [];
+    }
 
-    this.highlightedStationIds.clear(); 
+    if (scope === 'all' || scope === 'clicked') {
+      console.log('[MapView] Clearing clicked station highlight and overlay.');
+      if (this.clickedStationHighlightMarker) {
+        this.clickedStationHighlightMarker.setMap(null);
+        this.clickedStationHighlightMarker = null;
+      }
+      if (this.clickedStationOverlay) {
+        this.clickedStationOverlay.destroy();
+        this.clickedStationOverlay = null;
+      }
+    }
 
-    console.log('[MapView] Clearing old highlightedStationOverlays. Count:', this.highlightedStationOverlays.length);
-    this.highlightedStationOverlays.forEach(overlay => overlay.destroy());
-    this.highlightedStationOverlays = [];
+    if (scope === 'all') {
+      this.highlightedStationIds.clear(); // Clear this only when clearing everything
+    } else if (scope === 'clicked' && this.clickedStationId) {
+        this.highlightedStationIds.delete(this.clickedStationId); // Remove specific ID
+    } // For 'nearby', highlightedStationIds will be managed by createOverlaysForStations implicitly
+
   }
 
   private createOverlaysForStations(
     stationDivaMap: Map<number, string | number>, 
     monitorResponse: MonitorApiResponse | null
   ): void {
+    // Combine nearby stations with clicked station for overlay creation
+    const combinedStationDivaMap = new Map<number, string | number>([...stationDivaMap]);
+    
+    // Add clicked station to the overlay creation if it exists and isn't already in the nearby stations
+    if (this.clickedStationId !== null && this.clickedStationDiva !== null && !combinedStationDivaMap.has(this.clickedStationId)) {
+      combinedStationDivaMap.set(this.clickedStationId, this.clickedStationDiva);
+    }
     let mobileClosestStationId: number | null = null;
     if (this.isMobile && this.userMarker && this.userMarker.getPosition()) {
       console.log('[MapView] activeMobileOverlayStationId:', this.activeMobileOverlayStationId);
@@ -815,7 +876,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     console.log('[MapView] Valid line Bezeichnungen for filtering departures:', Array.from(validLineBezeichnungen));
 
-    stationDivaMap.forEach((divaValue, stationIdToHighlight) => {
+    combinedStationDivaMap.forEach((divaValue, stationIdToHighlight) => {
 
       const stationData = this.stationMarkerMap.get(stationIdToHighlight);
       const originalStationMarker = stationData?.marker; 
@@ -827,7 +888,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         const originalStrokeColor = (originalIcon && typeof originalIcon === 'object' && originalIcon.strokeColor) ? originalIcon.strokeColor : '#000000'; // Default to black if not found
 
         // Create a new marker for the highlight
-        const highlightMarker = new google.maps.Marker({
+        let highlightMarker = new google.maps.Marker({
           position: originalStationMarker.getPosition(),
           map: this.map,
           title: originalStationMarker.getTitle(), // Same title
@@ -841,7 +902,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           },
           zIndex: google.maps.Marker.MAX_ZINDEX + 1 // Ensure it's on top
         });
-        this.highlightMarkers.push(highlightMarker);
+        highlightMarker.setMap(this.map); // Add highlight marker to map
+        if (this.clickedStationId === stationIdToHighlight) {
+          // If there's an old clicked station marker, remove it
+          if (this.clickedStationHighlightMarker) {
+            this.clickedStationHighlightMarker.setMap(null);
+          }
+          this.clickedStationHighlightMarker = highlightMarker;
+        } else {
+          this.nearbyStationHighlightMarkers.push(highlightMarker); // Store nearby station's highlight marker
+        }
 
         // Make highlight marker clickable to show overlay for that station (on mobile)
         highlightMarker.addListener('click', () => {
@@ -923,7 +993,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                         `<div class="departure-line">` +
                           lineNameHtml + // Use the styled pill
                           ` <span class="material-icons line-direction-arrow-icon">chevron_right</span> ` +
-                          `<span class="line-direction">${line.towards}</span>: ` +
+                          `<span class="line-direction">${line.towards}</span> ` +
                           countdownsWrapperHtml + // Use the wrapped countdowns HTML
                         `</div>`
                       );
@@ -956,11 +1026,22 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                 </span>`;
             }
 
+            // Check if this is the clicked station (vs. a nearby station)
+            const isClickedStation = this.clickedStationId === stationIdToHighlight && 
+                                     !this.activeDivaMapForPolling.has(stationIdToHighlight);
+            
+            // Add close button if this is a clicked station overlay
+            const closeButtonHtml = isClickedStation ? 
+              `<div class="overlay-close-button" data-station-id="${stationIdToHighlight}" style="position: absolute; top: 5px; right: 5px;">
+                <span class="material-icons" style="font-size: 16px; cursor: pointer; color: #555; padding: 4px; border-radius: 50%; background-color: rgba(255,255,255,0.8);">close</span>
+              </div>` : '';
+            
             const overlayContent = `
-              <div class="custom-map-overlay">
+              <div class="custom-map-overlay ${isClickedStation ? 'clicked-station-overlay' : ''}">
                 <div class="station-info-header">
                   <span class="station-name-bold">${stationName}</span>
                   ${walkingTimeDisplayHtml}
+                  ${closeButtonHtml}
                 </div>
                 <div class="real-time-data">
                   ${realTimeHtml}
@@ -970,7 +1051,43 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             try {
               const overlay = new this.CustomMapOverlayCtor(position, overlayContent);
               overlay.setMap(this.map); // Attach overlay to the map
-              this.highlightedStationOverlays.push(overlay);
+              if (isClickedStation) {
+                // this.clickedStationOverlay is already assigned above
+              } else {
+                this.nearbyStationOverlays.push(overlay);
+              }
+              
+              // If this is the clicked station, keep track of its overlay
+              if (isClickedStation) {
+                this.clickedStationOverlay = overlay;
+              }
+              
+              // Add event listener to close button if this is a clicked station
+              if (isClickedStation) {
+                // Wait for the DOM to be updated with the new element
+                setTimeout(() => {
+                  const overlayElement = overlay.getDiv();
+                  if (overlayElement) {
+                    const closeButton = overlayElement.querySelector('.overlay-close-button');
+                    if (closeButton) {
+                      closeButton.addEventListener('click', (event: Event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        
+                        const oldClickedStationId = this.clickedStationId;
+                        // Clear clicked station references from component state
+                        this.clickedStationId = null;
+                        this.clickedStationDiva = null;
+                        
+                        // Destroy the overlay and marker (which are stored in this.clickedStationOverlay and this.clickedStationHighlightMarker)
+                        this.clearHighlightsAndOverlays('clicked'); // This will handle destroying and nullifying them
+                                                
+                        console.log(`[MapView] Removed clicked station from monitoring: ID ${oldClickedStationId}`);
+                      });
+                    }
+                  }
+                }, 10);
+              }
             } catch (e) {
               console.error('[MapView] Error creating CustomMapOverlay:', e);
             }
@@ -1082,6 +1199,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.highlightedStationIds.clear();
   }
   
+  private generatePollingKey(divaMap: Map<number, string | number>): string {
+    if (!divaMap || divaMap.size === 0) {
+      return '';
+    }
+    // Sort by stationId (key) first to ensure consistent key generation if values are numbers/strings
+    const sortedEntries = Array.from(divaMap.entries()).sort(([a], [b]) => a - b);
+    return sortedEntries.map(([, value]) => value).join(',');
+  }
+
   private addStationMarkers(response: LineStopsResponse): void {
     const processedStationIds = new Set<number>();
     Object.entries(response.lines).forEach(([lineId, line]) => {
@@ -1142,11 +1268,33 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         });
         
         marker.addListener('click', () => {
-          if (this.activeInfoWindow) {
-            this.activeInfoWindow.close();
+          // Check if this is already the clicked station
+          const isAlreadyClicked = this.clickedStationId === stationId;
+          
+          if (!isAlreadyClicked) {
+            // Always close any currently open InfoWindow
+            if (this.activeInfoWindow) {
+              this.activeInfoWindow.close();
+              this.activeInfoWindow = null;
+            }
+            
+            // If this station is not being monitored as a nearby station
+            if (this.activeDivaMapForPolling) {
+              // If there was a previously clicked station, clear it first
+              if (this.clickedStationId !== null) {
+                console.log(`[MapView] Replacing previously clicked station: ${this.clickedStationId}`);
+                this.clearHighlightsAndOverlays('clicked'); // Clear only the previously clicked station's elements
+              }
+              
+              // Set this as the new clicked station
+              console.log(`[MapView] Adding clicked station to real-time monitoring: ${stationName} (ID: ${stationId}, DIVA: ${diva})`);
+              this.clickedStationId = stationId;
+              this.clickedStationDiva = diva;
+              
+              // Update the polling with the new clicked station
+              this.updateMonitoredStationsAndPoll(this.activeDivaMapForPolling, false);
+            }
           }
-          infoWindow.open(this.map, marker);
-          this.activeInfoWindow = infoWindow;
         });
         
         this.stationMarkers.push(marker);
