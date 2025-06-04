@@ -31,13 +31,10 @@
 .logo {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
+  /* border-radius: 50%; /* Optional: keep if you want the image to be clipped to a circle */
+  /* background-color: rgba(255, 255, 255, 0.2); /* Likely not needed for an SVG */
   margin-right: 12px;
+  vertical-align: middle; /* Helps align image with text if needed */
 }
 
 .brand-name {

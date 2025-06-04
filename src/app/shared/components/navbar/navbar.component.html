@@ -5,13 +5,13 @@
       <a routerLink="/">
         <div class="logo-container">
           <!-- Logo placeholder - replace with actual logo image -->
-          <span class="logo">VF</span>
+          <img src="icons/web-app-manifest-192x192.png" alt="ViennaFlow Logo" class="logo">
           <span class="brand-name">ViennaFlow</span>
         </div>
       </a>
     </div>
 
-    <!-- Desktop menu -->
+    <!-- Desktop menu (hidden for now)
     <div class="nav-links" *ngIf="!(isHandset$ | async)">
       <button
         mat-button
@@ -23,8 +23,9 @@
         {{ item.label }}
       </button>
     </div>
+    -->
 
-    <!-- Mobile menu with hamburger button -->
+    <!-- Mobile menu with hamburger button (hidden for now)
     <button
       *ngIf="isHandset$ | async"
       mat-icon-button
@@ -43,5 +44,6 @@
         {{ item.label }}
       </button>
     </mat-menu>
+    -->
   </div>
 </mat-toolbar>
