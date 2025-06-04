@@ -75,6 +75,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastMonitorResponse: MonitorApiResponse | null = null; // Store last successful response
   private stationWalkingTimes = new Map<number, number>(); // stationId -> walking duration in minutes
   private lastWalkingTimeUpdateLocation: google.maps.LatLng | null = null;
+  private previousUserLocation: google.maps.LatLng | null = null;
   private walkingTimeUpdateSubscription: Subscription | null = null;
   private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 60000; // 1 minute
   private readonly MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M = 50; // 50 meters
@@ -342,63 +343,101 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private subscribeToLocationUpdates(): void {
-    // Subscribe to the location availability flag
+    // Subscription to handle the availability of the location service
     this.locationService.locationAvailable$.pipe(
       takeUntil(this.componentDestroyed$)
     ).subscribe(isAvailable => {
-      console.log('Location availability changed:', isAvailable);
       const previousErrorState = this.hasLocationError;
       this.hasLocationError = !isAvailable;
-      
-      // If location becomes available after being unavailable (state change)
+
       if (isAvailable && previousErrorState) {
-        console.log('Location is now available after being unavailable, clearing error state');
-        
-        // Stop any retry attempts
+        console.log('[MapView] Location service is now available after being unavailable.');
+        this.isLoading = false; // Assuming coordinates$ will provide the fix
+        // Clear any specific retry logic if it was running
         if (this.locationErrorSubscription) {
           this.locationErrorSubscription.unsubscribe();
           this.locationErrorSubscription = null;
         }
-        
-        // Use the last known coordinates directly from the location service instead of subscribing
-        // This avoids the potential error when trying to get coordinates through subscription
-        const lastKnownCoords = this.locationService.getLastKnownCoordinates();
-        if (lastKnownCoords && this.map) {
-          console.log('Centering map on last known location:', lastKnownCoords);
-          const userLatLng = new google.maps.LatLng(lastKnownCoords.latitude, lastKnownCoords.longitude);
-          this.map.setCenter(userLatLng);
-          this.map.setZoom(15);
-          
-          // Create or update user marker
-          if (!this.userMarker) {
-            this.userMarker = new google.maps.Marker({
-              position: userLatLng,
-              map: this.map,
-              icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 7,
-                fillColor: '#4285F4',
-                fillOpacity: 1,
-                strokeColor: 'white',
-                strokeWeight: 2,
-              },
-              title: 'Your Location'
-            });
-          } else {
-            this.userMarker.setPosition(userLatLng);
-          }
-          
-          // Also fetch nearby stops now that we have location
-          this.fetchAndDisplayNearbySteige(lastKnownCoords).subscribe();
-        } else {
-          console.warn('No last known coordinates available after location became available');
-        }
       } else if (!isAvailable && !this.locationErrorSubscription) {
-        console.log('Location is now unavailable, setting up error handling');
+        console.log('[MapView] Location service is unavailable, setting up error handling.');
         this.setupLocationErrorHandling();
       }
     });
-    
+
+    // Subscription to handle continuous coordinate updates
+    this.locationService.currentLocation$.pipe(
+      takeUntil(this.componentDestroyed$),
+      filter((coordinates): coordinates is Coordinates => coordinates !== null)
+    ).subscribe({
+      next: (coordinates: Coordinates) => {
+        if (!this.map || !google || !google.maps || !google.maps.geometry || !google.maps.geometry.spherical) {
+          console.warn('[MapView] Map or Google Maps Geometry library not available for location update.');
+          return;
+        }
+
+        const newUserLatLng = new google.maps.LatLng(coordinates.latitude, coordinates.longitude);
+
+        if (!this.userMarker) {
+          console.log('[MapView] First location fix, creating user marker and centering map.');
+          this.userMarker = new google.maps.Marker({
+            position: newUserLatLng,
+            map: this.map,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: '#4285F4',
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 2,
+            },
+            title: 'Your Location'
+          });
+          this.map.setCenter(newUserLatLng);
+          this.map.setZoom(15); // Default zoom for first fix
+          this.isLoading = false;
+          this.hasLocationError = false; // Clear any previous error state
+
+          this.fetchAndDisplayNearbySteige(coordinates)
+            .pipe(takeUntil(this.componentDestroyed$))
+            .subscribe({
+              error: (err) => console.error('[MapView] Error fetching nearby Steige on initial location:', err)
+            });
+        } else {
+          this.userMarker.setPosition(newUserLatLng);
+          if (this.previousUserLocation) {
+            const distance = google.maps.geometry.spherical.computeDistanceBetween(this.previousUserLocation, newUserLatLng);
+            if (distance > 1000) { // More than 1 km
+              console.log(`[MapView] Large location jump detected (${Math.round(distance)}m). Recenter map with panTo.`);
+              this.map.panTo(newUserLatLng); // Use panTo for smooth animation
+              this.map.setZoom(15); // Reset zoom on significant jump
+              // Re-fetch nearby Steige for the new center
+              this.fetchAndDisplayNearbySteige(coordinates)
+                .pipe(takeUntil(this.componentDestroyed$))
+                .subscribe({
+                  error: (err) => console.error('[MapView] Error fetching nearby Steige after large jump:', err)
+                });
+            }
+          }
+        }
+        
+        this.previousUserLocation = newUserLatLng;
+        this.checkUserMovementAndFetchWalkingTimes(); // Called after location update
+      },
+      error: (error: any) => {
+        console.error('[MapView] Error receiving continuous location updates:', error);
+        this.hasLocationError = true;
+        this.isLoading = false; 
+        // locationAvailable$ should also emit false, triggering setupLocationErrorHandling if needed.
+      }
+    });
+  }
+
+  // The original content of subscribeToLocationUpdates is now split and enhanced.
+  // We need to ensure the old content is fully replaced by the new logic above.
+  // So, we effectively replace the entire old method body with the new one.
+  // The following is a placeholder to ensure the tool replaces from the method signature.
+  private _originalSubscribeToLocationUpdatesPlaceholder(): void {
+
     // Main subscription for location updates and processing
     this.locationService.currentLocation$.pipe(
       takeUntil(this.componentDestroyed$),
@@ -895,7 +934,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           icon: { // Style for the highlight marker
             path: google.maps.SymbolPath.CIRCLE,
             scale: 7, // Same scale or slightly different if desired
-            fillColor: '#6495ED', // Cornflower Blue for highlight
+            fillColor: stationIdToHighlight === this.clickedStationId ? '#FFFFFF' : '#6495ED', // White for clicked, Cornflower Blue for nearby
             fillOpacity: 1,
             strokeColor: originalStrokeColor, // Use original marker's stroke color
             strokeWeight: originalIcon?.strokeWeight || 2 // Use original stroke weight or default
