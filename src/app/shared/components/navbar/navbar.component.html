@@ -29,8 +29,14 @@
 
       <!-- Auth links for Desktop -->
       <ng-container *ngIf="!(isLoggedIn$ | async)">
-        <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">Sign Up</button>
-        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">Login</button>
+        <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">
+          <mat-icon>person_add</mat-icon>
+          <span>Sign Up</span>
+        </button>
+        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">
+          <mat-icon>login</mat-icon>
+          <span>Login</span>
+        </button>
       </ng-container>
 
       <ng-container *ngIf="isLoggedIn$ | async">

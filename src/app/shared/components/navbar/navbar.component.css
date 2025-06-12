@@ -38,7 +38,7 @@
   height: 36px;
   /* border-radius: 50%; /* Optional: keep if you want the image to be clipped to a circle */
   /* background-color: rgba(255, 255, 255, 0.2); /* Likely not needed for an SVG */
-  margin-right: 12px;
+  margin-right: 6px;
   vertical-align: middle; /* Helps align image with text if needed */
 }
 
@@ -51,6 +51,31 @@
 .nav-links {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.nav-links button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+.nav-links button mat-icon {
+  margin-right: 4px;
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+}
+
+/* Remove margin for the more button icon */
+.nav-links button[mat-icon-button] mat-icon {
+  margin-right: 0;
+}
+
+.nav-links button span {
+  font-size: 14px;
 }
 
 .active-link {

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,7 +27,8 @@ import { User } from '@supabase/supabase-js';
     MatDividerModule
   ],
   templateUrl: './navbar.component.html',
-  styleUrl: './navbar.component.css'
+  styleUrl: './navbar.component.css',
+  encapsulation: ViewEncapsulation.None // This will use the global configuration
 })
 export class NavbarComponent {
   authService = inject(AuthService);
