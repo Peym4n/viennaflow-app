@@ -47,7 +47,7 @@ export class AuthService {
           persistSession: true,
           detectSessionInUrl: true,
           autoRefreshToken: false, // Temporarily disable for debugging lock issue
-          debug: true,
+          debug: false,
         }
       }
     );

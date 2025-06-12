@@ -45,6 +45,7 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
           this.div.innerHTML = '';
           this.div.appendChild(content);
         }
+        this.draw();
       }
     }
 
@@ -94,25 +95,20 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       // this.div.style.visibility = 'visible';
       // this.div.style.opacity = '1';
 
-      console.log('[CustomMapOverlay] onAdd called. Div created.');
 
       if (typeof this.content === 'string') {
         this.div.innerHTML = this.content;
       } else {
         this.div.appendChild(this.content);
       }
-      console.log(`[CustomMapOverlay] Content set. offsetWidth: ${this.div.offsetWidth}, offsetHeight: ${this.div.offsetHeight}`);
 
       const panes = this.getPanes();
       // Prioritize floatPane for custom overlays to appear above polylines and markers.
       if (panes && panes.floatPane) { 
         panes.floatPane.appendChild(this.div);
-        console.log('[CustomMapOverlay] Appended to floatPane.');
       } else if (panes && panes.overlayLayer) { // Fallback if floatPane is not available
-        console.warn('[CustomMapOverlay] floatPane not available, falling back to overlayLayer.');
         panes.overlayLayer.appendChild(this.div);
       } else {
-        console.error('[CustomMapOverlay] No suitable map pane found for overlay.');
       }
     }
 
@@ -143,7 +139,7 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
     }
 
     override onRemove() {
-      console.log('[CustomMapOverlay] onRemove called.', this.div);
+      // console.log('[CustomMapOverlay] onRemove called.', this.div);
       if (this.div && this.div.parentNode) {
         (this.div.parentNode as HTMLElement).removeChild(this.div);
         this.div = undefined;
@@ -151,7 +147,7 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
     }
 
     destroy() {
-      console.log('[CustomMapOverlay] destroy called.', this.div);
+      // console.log('[CustomMapOverlay] destroy called.', this.div);
       this.setMap(null);
     }
 

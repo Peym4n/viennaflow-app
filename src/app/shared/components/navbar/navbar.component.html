@@ -11,6 +11,9 @@
       </a>
     </div>
 
+    <!-- Spacer to push nav links to the right -->
+    <div class="spacer"></div>
+
     <!-- Desktop menu -->
     <div class="nav-links" *ngIf="!(isHandset$ | async)">
       <button
@@ -20,17 +23,14 @@
         routerLinkActive="active-link"
         [routerLinkActiveOptions]="{exact: item.route === '/'}"
       >
-        {{ item.label }}
+        <mat-icon>{{ item.icon }}</mat-icon>
+        <span>{{ item.label }}</span>
       </button>
-
-      <!-- New Links for Desktop -->
-      <a mat-button href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
-      <a mat-button href="https://viennaflow.at/imprint" target="_blank" rel="noopener noreferrer">Imprint</a>
 
       <!-- Auth links for Desktop -->
       <ng-container *ngIf="!(isLoggedIn$ | async)">
-        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">Login</button>
         <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">Sign Up</button>
+        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">Login</button>
       </ng-container>
 
       <ng-container *ngIf="isLoggedIn$ | async">
@@ -41,28 +41,33 @@
           <mat-icon>logout</mat-icon> Logout
         </button>
       </ng-container>
+
+      <!-- Desktop More Menu Button -->
+      <button mat-icon-button [matMenuTriggerFor]="desktopMoreMenu" aria-label="More options">
+        <mat-icon>more_vert</mat-icon>
+      </button>
     </div>
 
     <!-- Mobile menu with hamburger button -->
     <button
       *ngIf="isHandset$ | async"
       mat-icon-button
-      [matMenuTriggerFor]="menu"
+      [matMenuTriggerFor]="mobileMenu"
       aria-label="Toggle navigation menu"
     >
       <mat-icon>menu</mat-icon>
     </button>
 
-    <mat-menu #menu="matMenu" xPosition="before">
+    <!-- Mobile Menu -->
+    <mat-menu #mobileMenu="matMenu" xPosition="before">
       <button
         mat-menu-item
         *ngFor="let item of navItems"
         (click)="navigateTo(item.route)"
       >
-        {{ item.label }}
+        <mat-icon>{{ item.icon }}</mat-icon>
+        <span>{{ item.label }}</span>
       </button>
-
-      <!-- New Links for Mobile -->
       <mat-divider></mat-divider>
       <a mat-menu-item href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">
         <mat-icon>shield</mat-icon> Privacy Policy
@@ -70,18 +75,16 @@
       <a mat-menu-item href="https://viennaflow.at/imprint" target="_blank" rel="noopener noreferrer">
         <mat-icon>info</mat-icon> Imprint
       </a>
-      
       <!-- Auth links for Mobile -->
       <ng-container *ngIf="!(isLoggedIn$ | async)">
         <mat-divider></mat-divider>
-        <button mat-menu-item (click)="navigateTo('/auth/login')">
-          <mat-icon>login</mat-icon> Login
-        </button>
         <button mat-menu-item (click)="navigateTo('/auth/signup')">
           <mat-icon>person_add</mat-icon> Sign Up
         </button>
+        <button mat-menu-item (click)="navigateTo('/auth/login')">
+          <mat-icon>login</mat-icon> Login
+        </button>
       </ng-container>
-
       <ng-container *ngIf="isLoggedIn$ | async">
         <mat-divider></mat-divider>
         <button mat-menu-item (click)="navigateTo('/profile')">
@@ -91,6 +94,16 @@
           <mat-icon>logout</mat-icon> Logout
         </button>
       </ng-container>
+    </mat-menu>
+
+    <!-- Desktop More Menu -->
+    <mat-menu #desktopMoreMenu="matMenu" xPosition="before">
+      <a mat-menu-item href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">
+        <mat-icon>shield</mat-icon> Privacy Policy
+      </a>
+      <a mat-menu-item href="https://viennaflow.at/imprint" target="_blank" rel="noopener noreferrer">
+        <mat-icon>info</mat-icon> Imprint
+      </a>
     </mat-menu>
   </div>
 </mat-toolbar>

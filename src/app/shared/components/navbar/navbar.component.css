@@ -26,6 +26,11 @@
 .logo-container {
   display: flex;
   align-items: center;
+  width: 100%;
+}
+
+.spacer {
+  flex: 1 1 auto;
 }
 
 .logo {
@@ -73,4 +78,19 @@
   .container {
     padding: 0 8px;
   }
+}
+
+/* Styles for icons in nav buttons */
+.nav-links button mat-icon {
+  margin-right: 6px;
+}
+
+.nav-links button span,
+.nav-links button mat-icon {
+  vertical-align: middle;
+}
+
+/* Styles for icons in menu items */
+mat-menu-item mat-icon {
+  margin-right: 16px; /* Material Design standard */
 }

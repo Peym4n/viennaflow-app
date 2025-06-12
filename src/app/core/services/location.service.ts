@@ -6,6 +6,7 @@ export interface Coordinates {
   latitude: number;
   longitude: number;
   accuracy?: number;
+  timestamp?: number;
 }
 
 @Injectable({
@@ -48,7 +49,8 @@ export class LocationService implements OnDestroy {
         const coords: Coordinates = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
+          accuracy: position.coords.accuracy,
+          timestamp: position.timestamp
         };
         console.log('Location updated:', coords);
         this.lastKnownCoords = coords;
@@ -72,8 +74,10 @@ export class LocationService implements OnDestroy {
           console.log('Using last known location while starting retry attempts');
           this.startRetryAttempts();
         } else {
-          // Only propagate error if we have no previous location
-          this.currentLocationSubject.error(error);
+          // Do not propagate a recoverable error, as it would terminate the stream.
+          // The `locationAvailable$` subject handles the error state in the UI.
+          // The retry mechanism will attempt to get a location later.
+          console.warn('[LocationService] No last known location and an error occurred. Starting retry attempts.');
           this.startRetryAttempts();
         }
       },
@@ -119,7 +123,8 @@ export class LocationService implements OnDestroy {
           const coords: Coordinates = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp
           };
           console.log('Location retry successful:', coords);
           this.lastKnownCoords = coords;
@@ -170,7 +175,8 @@ export class LocationService implements OnDestroy {
             const coords: Coordinates = {
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy
+              accuracy: position.coords.accuracy,
+              timestamp: position.timestamp
             };
             observer.next(coords);
             observer.complete();

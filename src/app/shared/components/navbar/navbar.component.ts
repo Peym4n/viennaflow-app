@@ -73,8 +73,8 @@ export class NavbarComponent {
     );
     
   navItems = [
-    { label: 'Home', route: '/' },
-    { label: 'About', route: '/about' }
+    { label: 'Home', route: '/', icon: 'home' },
+    { label: 'About', route: '/about', icon: 'info' }
   ];
   
   navigateTo(route: string): void {
