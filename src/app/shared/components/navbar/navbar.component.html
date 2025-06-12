@@ -23,6 +23,10 @@
         {{ item.label }}
       </button>
 
+      <!-- New Links for Desktop -->
+      <a mat-button href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+      <a mat-button href="https://viennaflow.at/imprint" target="_blank" rel="noopener noreferrer">Imprint</a>
+
       <!-- Auth links for Desktop -->
       <ng-container *ngIf="!(isLoggedIn$ | async)">
         <button mat-button routerLink="/auth/login" routerLinkActive="active-link">Login</button>
@@ -57,6 +61,15 @@
       >
         {{ item.label }}
       </button>
+
+      <!-- New Links for Mobile -->
+      <mat-divider></mat-divider>
+      <a mat-menu-item href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">
+        <mat-icon>shield</mat-icon> Privacy Policy
+      </a>
+      <a mat-menu-item href="https://viennaflow.at/imprint" target="_blank" rel="noopener noreferrer">
+        <mat-icon>info</mat-icon> Imprint
+      </a>
       
       <!-- Auth links for Mobile -->
       <ng-container *ngIf="!(isLoggedIn$ | async)">

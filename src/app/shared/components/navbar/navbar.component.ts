@@ -74,8 +74,6 @@ export class NavbarComponent {
     
   navItems = [
     { label: 'Home', route: '/' },
-    { label: 'Explore', route: '/explore' },
-    { label: 'Favorites', route: '/favorites' },
     { label: 'About', route: '/about' }
   ];
   
