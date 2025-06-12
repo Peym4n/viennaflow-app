@@ -37,6 +37,7 @@
     "@angular/router": "19.2.10",
     "@angular/service-worker": "19.2.10",
     "@dotenvx/dotenvx": "^1.44.1",
+    "@supabase/supabase-js": "^2.50.0",
     "axios": "^1.8.3",
     "crypto-js": "^4.2.0",
     "rxjs": "~7.8.0",

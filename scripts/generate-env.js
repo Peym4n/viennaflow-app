@@ -16,6 +16,8 @@ if (!fs.existsSync(environmentsDir)) {
 // Get API keys using dotenvx for encrypted environment variables
 const googleMapsApiKey = dotenvx.get('GOOGLE_MAPS_API_KEY');
 const googleMapsMapId = dotenvx.get('GOOGLE_MAPS_MAP_ID');
+const supabaseUrl = dotenvx.get('SUPABASE_URL');
+const supabaseAnonKey = dotenvx.get('SUPABASE_ANON_KEY');
 
 // Get current environment from Vercel if available
 const environment = process.env.VERCEL_ENV || 'development';
@@ -31,6 +33,10 @@ export const environment = {
   googleMaps: {
     apiKey: '${googleMapsApiKey || ''}',
     mapId: '${googleMapsMapId || ''}'
+  },
+  supabase: {
+    url: '${supabaseUrl || ''}',
+    anonKey: '${supabaseAnonKey || ''}'
   },
 };
 `;

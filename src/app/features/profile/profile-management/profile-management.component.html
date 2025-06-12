@@ -1,0 +1,44 @@
+<div class="profile-management-container">
+  <h2>Profile Management</h2>
+
+  <div *ngIf="(authService.loggedIn$ | async); else showLoginMessage">
+    <div *ngIf="currentUserProfile; else loadingProfile">
+      <p><strong>Email:</strong> {{ currentUserProfile.email }}</p>
+      <p><strong>Current Username:</strong> {{ currentUserProfile.username || 'Not set' }}</p>
+
+      <form [formGroup]="profileForm" (ngSubmit)="onSubmit()" novalidate>
+        <div class="form-field">
+          <label for="username">Set/Update Username:</label>
+          <input id="username" type="text" formControlName="username" placeholder="Enter your username">
+          <div *ngIf="usernameControl?.invalid && (usernameControl?.dirty || usernameControl?.touched)" class="error-message">
+            <small *ngIf="usernameControl?.errors?.['required']">Username is required.</small>
+            <small *ngIf="usernameControl?.errors?.['minlength']">Username must be at least 3 characters.</small>
+            <small *ngIf="usernameControl?.errors?.['maxlength']">Username cannot exceed 50 characters.</small>
+          </div>
+        </div>
+
+        <div *ngIf="errorMessage" class="error-message server-error">
+          <small>{{ errorMessage }}</small>
+        </div>
+        <div *ngIf="successMessage" class="success-message server-success">
+          <small>{{ successMessage }}</small>
+        </div>
+
+        <button type="submit" [disabled]="profileForm.invalid || isLoading">
+          <span *ngIf="!isLoading">Save Username</span>
+          <span *ngIf="isLoading">Saving...</span>
+        </button>
+      </form>
+    </div>
+
+    <ng-template #loadingProfile>
+      <p>Loading profile information...</p>
+    </ng-template>
+
+  </div>
+
+  <ng-template #showLoginMessage>
+    <p>Please <a routerLink="/auth/login">login</a> to manage your profile.</p>
+  </ng-template>
+
+</div>

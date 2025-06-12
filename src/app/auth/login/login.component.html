@@ -1,0 +1,37 @@
+<div class="login-container">
+  <h2>Login</h2>
+  <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
+    <div class="form-field">
+      <label for="email">Email</label>
+      <input id="email" type="email" formControlName="email" placeholder="your@email.com">
+      <div *ngIf="email?.invalid && (email?.dirty || email?.touched)" class="error-message">
+        <small *ngIf="email?.errors?.['required']">Email is required.</small>
+        <small *ngIf="email?.errors?.['email']">Please enter a valid email address.</small>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label for="password">Password</label>
+      <input id="password" type="password" formControlName="password" placeholder="Password">
+      <div *ngIf="password?.invalid && (password?.dirty || password?.touched)" class="error-message">
+        <small *ngIf="password?.errors?.['required']">Password is required.</small>
+        <small *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters long.</small>
+      </div>
+    </div>
+
+    <div *ngIf="errorMessage" class="error-message server-error">
+      <small>{{ errorMessage }}</small>
+    </div>
+
+    <button type="submit" [disabled]="loginForm.invalid || isLoading">
+      <span *ngIf="!isLoading">Login</span>
+      <span *ngIf="isLoading">Logging in...</span>
+    </button>
+  </form>
+
+  <p class="additional-links">
+    Don't have an account? <a routerLink="/auth/signup">Sign Up</a>
+    <br>
+    <a routerLink="/auth/forgot-password">Forgot Password?</a> <!-- Add this link later if needed -->
+  </p>
+</div>

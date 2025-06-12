@@ -1,5 +1,3 @@
-# ViennaFlow Project Knowledge
-
 ## Project Overview
 - Mobile-first application that also works on desktop
 - Implemented as a Progressive Web App (PWA)
@@ -40,15 +38,29 @@
     - Implements custom HTML map overlays by extending `google.maps.OverlayView` for richer content than standard InfoWindows.
     - Uses a **factory pattern** for creating these custom overlay classes. This is crucial to correctly manage the dependency on the Google Maps API, ensuring it's loaded before the overlay class (which extends a Maps API class) is defined.
 - **Shared Data Structures:**
-    - Employs shared TypeScript type definitions for data structures exchanged between the frontend and backend (e.g., for station and 'Steig' data) to maintain consistency.
-- **Backend API Details:**
-    - The API (deployed on Vercel) includes specific endpoints to provide data for nearby transit points of interest (e.g., 'Steige'), which in turn queries the Supabase database (potentially via RPC calls).
+    - Employs shared TypeScript type definitions for data structures exchanged between the frontend and backend (e.g., for station and 'Steig' data, located in `src/app/shared-types/api-models.ts` and `api/types/api-models.ts`) to maintain consistency.
+
+## Backend API Details (Vercel Serverless Functions)
+- **Data Sources**: Supabase (direct queries and RPCs), static `lineStops.json` file, external Wiener Linien OGD API, Google Distance Matrix API.
+- **Caching**: Upstash Redis is used extensively for caching API responses, session data, and managing distributed locks/queues for real-time data fetching.
+- **Key Endpoints**:
+    - `api/getLineStops.ts`: Serves detailed line and stop data from `lineStops.json`, filterable by `linien_id`.
+    - `api/getLines.ts`: Fetches metro line metadata from Supabase `linien` table.
+    - `api/getStops.ts`: Fetches station (Haltestellen) data from Supabase, supporting queries by line ID, specific station IDs, or all metro stations. Converts WKB to GeoJSON.
+    - `api/getSteige.ts`: Fetches individual platforms/points (Steige) for a given main station ID from Supabase. Converts WKB to GeoJSON.
+    - `api/getNearbySteige.ts`: Calls Supabase RPC `get_nearby_steige` based on lat/lon/radius, then filters results against allowed `linien_ids` from `lineStops.json`.
+    - `api/getRealTimeData.ts`: Simple proxy to Wiener Linien OGD monitor API for a single RBL.
+    - `api/getWienerLinienMonitor.ts`: Fetches and processes real-time monitor data for multiple DIVA numbers from Wiener Linien OGD API. Filters for U-Bahn lines (U1, U2, U3, U4, U6), limits departures per line to 3, and aggregates data for monitors belonging to the same physical station.
+    - `api/routes/monitor.ts`: Advanced, Redis-backed endpoint for real-time monitor data. Implements request batching, throttling, distributed locking, and caching of individual monitor data to efficiently manage calls to the Wiener Linien API. This is the primary endpoint for client-side real-time updates.
+    - `api/session/init.ts`: Initializes a secure session. Generates a `sessionId` (sent as HttpOnly cookie) and a `sessionSigningKey` (stored in Redis, returned to client) for signing secure requests.
+    - `api/routes/walking-matrix.ts`: Securely calculates walking times using Google Distance Matrix API. Validates requests via HMAC-SHA256 signature (using `sessionSigningKey` from Redis) and timestamp. Uses a server-side Google API key.
 
 ## Security Approach
 - API keys stored in encrypted .env files using dotenvx
 - Different keys for development, staging, and production
 - Environment variables accessed via dotenvx.get() method
 - Generated environment.ts is git-ignored
+- Secure backend endpoints (e.g., walking matrix) use session-based HMAC-SHA256 request signing.
 
 ## Deployment
 - Uses Vercel for deployment
@@ -56,8 +68,7 @@
 
 ## Code Comments
 - Write comments in English generally across the project
-- Write comments in German if the file already contains other German comments
-- The getStops.js file contains German comments, so new comments there should also be in German
+- Write comments in German if the file already contains other German comments (e.g., `api/getStops.ts`).
 
 ## Recent Architectural Changes (Walking Time Feature - May 2025)
 
@@ -90,3 +101,33 @@
 
 ### `vercel.json` Configuration
 - Updated `rewrites` to improve routing for API calls and SPA fallback, particularly for the `vercel dev` environment. The current configuration aims to map API paths like `/api/some/path` to `/api/some/path.ts` if no extension is present, and includes a robust SPA fallback that excludes common static asset and API paths. (Note: Local `vercel dev` routing behavior for API functions remains an area of ongoing troubleshooting).
+
+## Supabase Auth & Profile Integration (June 2025)
+
+### User Authentication Flow
+- **Signup:** Users can sign up with email and password.
+    - Email confirmation is required. UI notifies users to check their email for an activation link.
+    - Signup form is hidden post-successful registration attempt to guide users to email verification.
+- **Login:** Users can log in with confirmed credentials.
+- **Logout:** Users can log out, clearing their session.
+- **Session Management:** [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1) manages user sessions and authentication state using `@supabase/supabase-js`.
+    - `NavigatorLockAcquireTimeoutError` resolved by disabling `autoRefreshToken` and ensuring `@supabase/supabase-js` v2.70.0 is installed.
+    - Circular dependency between [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1) and [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1) resolved using Angular's `Injector`.
+
+### User Profile Management
+- **`profiles` Table:** A Supabase table `public.profiles` stores user-specific data:
+    - [id](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:7:0-16:1) (UUID, foreign key to `auth.users.id`, primary key)
+    - [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (TEXT, unique, chosen by user)
+    - [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3) (TEXT, sourced from `auth.users.email`)
+- **`handle_new_user` Trigger:** A PostgreSQL trigger function automatically creates a new row in `public.profiles` when a new user signs up in `auth.users`. This trigger populates [id](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:7:0-16:1), [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3), and an initial [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (if provided in `raw_user_meta_data`, otherwise null).
+- **[ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1):** An Angular service ([src/app/core/services/profile.service.ts](cci:7://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:0:0-0:0)) handles:
+    - Fetching the current user's profile from the `profiles` table.
+    - Updating the user's username.
+- **UI Integration:**
+    - **Profile Management Page:** Allows users to view their email and set/update their username.
+    - **Navbar Display:** After login, the navbar displays the user's [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (from [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1)). If no username is set, it falls back to the user's [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3).
+
+### Key Dependencies & Configuration
+- `@supabase/supabase-js`: v2.70.0
+- Angular Services: [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1), [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1) for managing auth state and profile data.
+- Supabase RLS: Row Level Security policies are in place for `profiles` and `user_favorite_stations` tables to ensure users can only access/modify their own data.

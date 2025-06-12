@@ -11,7 +11,7 @@
       </a>
     </div>
 
-    <!-- Desktop menu (hidden for now)
+    <!-- Desktop menu -->
     <div class="nav-links" *ngIf="!(isHandset$ | async)">
       <button
         mat-button
@@ -22,10 +22,24 @@
       >
         {{ item.label }}
       </button>
-    </div>
-    -->
 
-    <!-- Mobile menu with hamburger button (hidden for now)
+      <!-- Auth links for Desktop -->
+      <ng-container *ngIf="!(isLoggedIn$ | async)">
+        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">Login</button>
+        <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">Sign Up</button>
+      </ng-container>
+
+      <ng-container *ngIf="isLoggedIn$ | async">
+        <button mat-button routerLink="/profile" routerLinkActive="active-link">
+          <mat-icon>account_circle</mat-icon> {{ userDisplay$ | async }}
+        </button>
+        <button mat-button (click)="logout()">
+          <mat-icon>logout</mat-icon> Logout
+        </button>
+      </ng-container>
+    </div>
+
+    <!-- Mobile menu with hamburger button -->
     <button
       *ngIf="isHandset$ | async"
       mat-icon-button
@@ -43,7 +57,27 @@
       >
         {{ item.label }}
       </button>
+      
+      <!-- Auth links for Mobile -->
+      <ng-container *ngIf="!(isLoggedIn$ | async)">
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="navigateTo('/auth/login')">
+          <mat-icon>login</mat-icon> Login
+        </button>
+        <button mat-menu-item (click)="navigateTo('/auth/signup')">
+          <mat-icon>person_add</mat-icon> Sign Up
+        </button>
+      </ng-container>
+
+      <ng-container *ngIf="isLoggedIn$ | async">
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="navigateTo('/profile')">
+          <mat-icon>account_circle</mat-icon> {{ userDisplay$ | async }}
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon> Logout
+        </button>
+      </ng-container>
     </mat-menu>
-    -->
   </div>
 </mat-toolbar>
