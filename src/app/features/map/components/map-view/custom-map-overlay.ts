@@ -74,6 +74,13 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       // Ensure the overlay container itself is interactive and blocks clicks to map below.
       this.div.style.pointerEvents = 'auto'; 
 
+      // Add click event listener to the overlay div itself
+      this.div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        return false;
+      }, true);
+
       // Visual styling (background, border, padding, text color) should be handled by the
       // CSS classes applied to the HTML content set via innerHTML.
       // Retain essential styles for overlay functionality:
@@ -94,7 +101,6 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       // Visibility and opacity should be controlled by show()/hide() or CSS if needed.
       // this.div.style.visibility = 'visible';
       // this.div.style.opacity = '1';
-
 
       if (typeof this.content === 'string') {
         this.div.innerHTML = this.content;
@@ -136,6 +142,19 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       this.div.style.top = finalTop + 'px';
 
       // console.log(`[CustomMapOverlay] draw - Anchor: (${sw.x}, ${sw.y}), Overlay W/H: (${overlayWidth}, ${overlayHeight}), Final style: left=${this.div.style.left}, top=${this.div.style.top}`);
+
+      // Ensure the overlay and its content are properly handling pointer events
+      if (this.div) {
+        this.div.style.pointerEvents = 'auto';
+        const contentElement = this.div.firstElementChild as HTMLElement;
+        if (contentElement) {
+          contentElement.style.pointerEvents = 'auto';
+          // Set pointer-events: auto on all children
+          contentElement.querySelectorAll('*').forEach(element => {
+            (element as HTMLElement).style.pointerEvents = 'auto';
+          });
+        }
+      }
     }
 
     override onRemove() {

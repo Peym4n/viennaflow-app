@@ -606,15 +606,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           this.map.panTo(newUserLatLng);
           this.map.setZoom(15);
 
-          // For mobile view, find station with shortest walking time and display its overlay
+          // Clear existing highlights and overlays immediately after pan
+          this.clearHighlightsAndOverlays();
+
+          // For mobile view, we'll handle overlay selection after nearby stations are fetched
           if (this.isMobile) {
             this.activeMobileOverlayStationId = null;
-            const stationWithShortestTime = this.findStationWithShortestWalkingTime();
-            if (stationWithShortestTime !== null) {
-              this.activeMobileOverlayStationId = stationWithShortestTime;
-              // Force a re-render of overlays to update the active mobile one
-              this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
-            }
           }
         }
       }
@@ -651,6 +648,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
         this.updateMonitoredStationsAndPoll(uniqueHaltestellenDivaMap, shouldFetchWalkingTimes);
         this.createOverlaysForStations(uniqueHaltestellenDivaMap, null);
+
+        // After fetching nearby stations, if we're on mobile and had a location jump,
+        // find and display the station with shortest walking time
+        if (this.isMobile && this.activeMobileOverlayStationId === null) {
+          const stationWithShortestTime = this.findStationWithShortestWalkingTime();
+          if (stationWithShortestTime !== null) {
+            this.activeMobileOverlayStationId = stationWithShortestTime;
+            console.log(`[MapView] After fetching nearby stations, selected station with shortest walking time: ${stationWithShortestTime}`);
+            // Clear existing overlays and recreate them to show the new active one
+            this.clearHighlightsAndOverlays();
+            this.createOverlaysForStations(uniqueHaltestellenDivaMap, null);
+          }
+        }
       }),
       mapTo(undefined),
       catchError((error: any) => {
@@ -1137,13 +1147,28 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           // Update existing overlay content
           existingOverlay.setContent(overlayContent);
           // Add click handler to prevent click-through
-          const overlayElement = existingOverlay.getDiv();
-          if (overlayElement) {
-            google.maps.event.clearListeners(overlayElement, 'click');
-            overlayElement.addEventListener('click', (event) => {
-              event.stopPropagation();
-            });
-          }
+          setTimeout(() => {
+            const overlayElement = existingOverlay.getDiv();
+            if (overlayElement) {
+              // Set pointer-events: none on the parent element
+              overlayElement.style.pointerEvents = 'none';
+              // Set pointer-events: all on the content element and all its children
+              const contentElement = overlayElement.firstElementChild as HTMLElement;
+              if (contentElement) {
+                contentElement.style.pointerEvents = 'all';
+                // Add click handler to content element
+                contentElement.addEventListener('click', (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return false;
+                }, true);
+                // Set pointer-events: all on all children
+                contentElement.querySelectorAll('*').forEach(element => {
+                  (element as HTMLElement).style.pointerEvents = 'all';
+                });
+              }
+            }
+          }, 0);
         } else {
           // Create new overlay
           try {
@@ -1152,12 +1177,28 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             newOverlay.setMap(this.map);
 
             // Add click handler to prevent click-through
-            const overlayElement = newOverlay.getDiv();
-            if (overlayElement) {
-              overlayElement.addEventListener('click', (event) => {
-                event.stopPropagation();
-              });
-            }
+            setTimeout(() => {
+              const overlayElement = newOverlay.getDiv();
+              if (overlayElement) {
+                // Set pointer-events: none on the parent element
+                overlayElement.style.pointerEvents = 'none';
+                // Set pointer-events: all on the content element and all its children
+                const contentElement = overlayElement.firstElementChild as HTMLElement;
+                if (contentElement) {
+                  contentElement.style.pointerEvents = 'all';
+                  // Add click handler to content element
+                  contentElement.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return false;
+                  }, true);
+                  // Set pointer-events: all on all children
+                  contentElement.querySelectorAll('*').forEach(element => {
+                    (element as HTMLElement).style.pointerEvents = 'all';
+                  });
+                }
+              }
+            }, 0);
 
             if (isClickedStationNow) {
               this.clickedStationOverlay = newOverlay;
@@ -1378,15 +1419,15 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       </div>` : '';
 
     return `
-      <div class="custom-map-overlay ${isClickedStationNow ? 'clicked-station-overlay' : ''}">
-        <div class="station-info-header" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+      <div class="custom-map-overlay ${isClickedStationNow ? 'clicked-station-overlay' : ''}" style="pointer-events: all !important;">
+        <div class="station-info-header" style="display: flex; justify-content: space-between; align-items: center; pointer-events: all !important;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1; pointer-events: all !important;">
             <span class="station-name-bold">${stationName}</span>
             ${walkingTimeDisplayHtml}
           </div>
           ${closeButtonHtml}
         </div>
-        <div class="real-time-data">
+        <div class="real-time-data" style="pointer-events: all !important;">
           ${realTimeHtml}
         </div>
       </div>`;
