@@ -1056,7 +1056,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         const overlayContent = this.generateOverlayContentHtml(
           stationName,
           stationIdToProcess,
-          divaValue,
+          divaValue ?? null,
           monitorResponse,
           validLineBezeichnungen,
           walkingTimeInMinutes,
@@ -1094,7 +1094,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                 const closeButton = overlayElement.querySelector('.overlay-close-button');
                 if (closeButton) {
                   google.maps.event.clearListeners(closeButton, 'click'); // Clear existing listeners
-                  closeButton.addEventListener('click', (event: Event) => {
+                  closeButton.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
 
@@ -1120,6 +1120,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                     }
                     this.clickedStationId = null; // Reset to null
                     this.clickedStationDiva = null; // Reset to null
+
+                    // For mobile view, reset activeMobileOverlayStationId and find station with shortest walking time
+                    if (this.isMobile) {
+                      this.activeMobileOverlayStationId = null;
+                      let minWalkingTime = Number.POSITIVE_INFINITY;
+                      let stationWithShortestTime: number | null = null;
+                      
+                      this.activeDivaMapForPolling.forEach((_diva, stationId) => {
+                        const walkingTime = this.stationWalkingTimes.get(stationId);
+                        if (walkingTime !== undefined && walkingTime < minWalkingTime) {
+                          minWalkingTime = walkingTime;
+                          stationWithShortestTime = stationId;
+                        }
+                      });
+
+                      if (stationWithShortestTime !== null) {
+                        this.activeMobileOverlayStationId = stationWithShortestTime;
+                        console.log(`[MapView] Reset to station with shortest walking time (${minWalkingTime} min): ${stationWithShortestTime}`);
+                      }
+                    }
 
                     // Trigger a re-evaluation of overlays to ensure nearby ones are still shown correctly
                     // and no stale clicked station remains.
@@ -1556,27 +1576,44 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isLoadingClickedStationData = true; // Indicate loading for the new clicked station
     console.log(`[handleStationClick] Set new clicked station. ID: ${this.clickedStationId}, DIVA: ${this.clickedStationDiva}, isLoadingClickedData: ${this.isLoadingClickedStationData}`);
 
-    console.log(`[MapView] Station '${stationName}' clicked. Immediately showing loading overlay.`);
+    // --- Step 3: Create highlight marker and overlay immediately ---
+    const highlightMarker = this.createHighlightMarker(stationId, marker);
+    this.clickedStationHighlightMarker = highlightMarker;
+    this.highlightedStationIds.add(stationId);
 
-    // --- Step 3: Prepare the map of stations for polling and overlay creation ---
-    // This map will include all nearby stations + the newly clicked one (if it has a DIVA).
-    // It's critical that this map reflects the *current desired state* for overlays and polling.
+    // For mobile view, update the active mobile overlay station
+    if (this.isMobile) {
+      this.activeMobileOverlayStationId = stationId;
+      console.log(`[handleStationClick] Updated activeMobileOverlayStationId to: ${stationId}`);
+    }
+
+    // Create initial overlay with loading state
+    const overlayContent = this.generateOverlayContentHtml(
+      stationName,
+      stationId,
+      diva ?? null,
+      null,
+      new Set<string>(),
+      undefined,
+      true,
+      true
+    );
+
+    try {
+      const position = marker.getPosition()!;
+      const newOverlay = new this.CustomMapOverlayCtor(position, overlayContent);
+      newOverlay.setMap(this.map);
+      this.clickedStationOverlay = newOverlay;
+    } catch (e) {
+      console.error('[MapView] Error creating initial CustomMapOverlay:', e);
+    }
+
+    // --- Step 4: Prepare the map of stations for polling and overlay creation ---
     const currentActiveDivaMap = new Map<number, string | number>([...this.activeDivaMapForPolling]);
     if (diva) { // Only add to the polling map if it has a DIVA ID
       currentActiveDivaMap.set(stationId, diva);
-    } else {
-      // If no DIVA, this station will not be polled, but we still want to show its overlay.
-      // Its state is managed purely by clickedStationId/Diva and isLoadingClickedStationData.
-      // It will be included in createOverlaysForStations via clickedStationId.
     }
     console.log(`[handleStationClick] Prepared currentActiveDivaMap. Size: ${currentActiveDivaMap.size}. Content:`, Array.from(currentActiveDivaMap.entries()));
-
-    // --- Step 4: Call createOverlaysForStations to display the initial loading overlay for the new clicked station ---
-    // Pass currentActiveDivaMap to ensure all *currently monitored* stations (nearby + new clicked) are considered
-    // for overlay creation/update. Pass null for monitorResponse to trigger loading state for new click.
-    console.log(`[handleStationClick] Calling createOverlaysForStations...`);
-    this.createOverlaysForStations(currentActiveDivaMap, null);
-    console.log(`[handleStationClick] createOverlaysForStations call returned.`);
 
     // --- Step 5: Trigger polling for the updated set of stations (if the new clicked station has a DIVA) ---
     if (diva) {
@@ -1587,6 +1624,20 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       console.log(`[MapView] Station '${stationName}' has no DIVA ID. Displayed no-data message immediately.`);
       // If no DIVA, no polling needed for this station, so reset loading state to show "no data" message immediately.
       this.isLoadingClickedStationData = false;
+      // Update overlay with no-data message
+      if (this.clickedStationOverlay) {
+        const updatedContent = this.generateOverlayContentHtml(
+          stationName,
+          stationId,
+          null,
+          null,
+          new Set<string>(),
+          undefined,
+          true,
+          false
+        );
+        this.clickedStationOverlay.setContent(updatedContent);
+      }
     }
     console.log(`[handleStationClick] Function finished for stationId: ${stationId}. Final clickedStationId: ${this.clickedStationId}`);
   }
