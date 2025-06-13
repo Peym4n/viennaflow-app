@@ -42,26 +42,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ... existing properties ...
   @ViewChild('mapContainer') mapContainer!: ElementRef;
-  
+
   private map: any = null;
   private userMarker: any = null;
   private metroLinePolylines: google.maps.Polyline[] = [];
   private stationMarkers: google.maps.Marker[] = [];
   private activeInfoWindow: google.maps.InfoWindow | null = null;
   private componentDestroyed$ = new Subject<void>();
-  
+
   private stationMarkerMap = new Map<number, { marker: google.maps.Marker, diva?: number | string }>();
   private highlightedStationIds = new Set<number>(); // Tracks stations that have a highlight marker and/or overlay
-  
+
   // For nearby stations (from activeDivaMapForPolling)
   private nearbyStationOverlays = new Map<number, ICustomMapOverlay>(); // Changed to Map for efficient updates
   private nearbyStationHighlightMarkers = new Map<number, google.maps.Marker>(); // Changed to Map for efficient updates
-  
+
   // For the single clicked station (not in activeDivaMapForPolling)
   private clickedStationHighlightMarker: google.maps.Marker | null = null;
   private CustomMapOverlayCtor!: CustomMapOverlayConstructor;
   private lineStopsData: LineStopsResponse | null = null; // To store line data for filtering
-  
+
   // Track the currently clicked station (only one at a time)
   private clickedStationId: number | null = null;
   private clickedStationDiva: string | number | null = null;
@@ -77,10 +77,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastWalkingTimeUpdateLocation: google.maps.LatLng | null = null;
   private previousUserLocation: google.maps.LatLng | null = null;
   private walkingTimeUpdateSubscription: Subscription | null = null;
-  private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 60000; // 1 minute
+  private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 30000;
   private readonly MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M = 50; // 50 meters
   private isLoadingClickedStationData: boolean = false; // Track loading state for clicked station's data
-  
+
   // Adaptive polling settings
   private isActivelyViewing = true; // Assume active by default
   private enableBatteryOptimization = true; // Default to battery saving mode
@@ -90,19 +90,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly NEARBY_STATION_POLLING_MS = 5000; // 5 seconds when near a station with imminent departure
   private readonly NEARBY_THRESHOLD_MINUTES = 5; // Consider "nearby" if within 5 minutes walking distance
   private pollingPausedInBackground = false; // Track if polling was paused due to background mode
-  
+
   // For ETag handling
   private lastETag: string | null = null;
-  
+
   // Track the last location that triggered a full nearby station data fetch
   private lastProcessedLocationLatLng: google.maps.LatLng | null = null;
   // Track the last location and timestamp for speed calculation
   private lastKnownLocationForSpeed: { latLng: google.maps.LatLng; timestamp: number } | null = null;
   // Define a threshold for walking speed in meters per seconds
-  private readonly WALKING_SPEED_THRESHOLD_MPS = 2.5; 
+  private readonly WALKING_SPEED_THRESHOLD_MPS = 2.5;
   // Global flag to indicate if walking times should be fetched based on the last speed calculation
   private _shouldFetchWalkingTimesGlobal: boolean = true; // Default to true (fetch walking times)
-  
+
   /**
    * Updates the polling interval based on user context:
    * 1. When app is not visible: use longer interval (60s) or pause polling if battery optimization is enabled
@@ -112,7 +112,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private updatePollingInterval = (): void => {
     const previousInterval = this.pollingIntervalMs;
     const wasPollingPaused = this.pollingPausedInBackground;
-    
+
     // Handle background mode with battery optimization
     if (!this.isActivelyViewing && this.enableBatteryOptimization) {
       // If we're moving to background mode and battery optimization is enabled, pause polling
@@ -128,18 +128,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       // We're in foreground or battery optimization is disabled
       this.pollingPausedInBackground = false;
-      
+
       // Start with base interval depending on whether app is in foreground/background
-      this.pollingIntervalMs = this.isActivelyViewing ? 
-        this.DEFAULT_ACTIVE_POLLING_MS : 
+      this.pollingIntervalMs = this.isActivelyViewing ?
+        this.DEFAULT_ACTIVE_POLLING_MS :
         this.DEFAULT_INACTIVE_POLLING_MS;
-      
+
       // If user is within walking distance of a station, increase polling frequency
       if (this.isActivelyViewing && this.stationWalkingTimes.size > 0) {
         // Check if any station is within the NEARBY_THRESHOLD_MINUTES walking distance
         const isNearStation = Array.from(this.stationWalkingTimes.values())
           .some(walkingMinutes => walkingMinutes <= this.NEARBY_THRESHOLD_MINUTES);
-        
+
         if (isNearStation) {
           console.log(`[MapView] User is near a station, using fast polling interval (${this.NEARBY_STATION_POLLING_MS / 1000}s)`);
           this.pollingIntervalMs = this.NEARBY_STATION_POLLING_MS;
@@ -171,26 +171,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private locationErrorSubscription: Subscription | null = null;
   showMetroLines = true;
   showStations = false; // Stations will be hidden initially
-  
+
   private snackBar = inject(MatSnackBar);
   private mapsService = inject(GoogleMapsService);
   private apiService = inject(ApiService);
   private locationService = inject(LocationService);
-  
+
   // Declare the visibility change handler as a property to avoid TypeScript errors
   private handleVisibilityChange = (): void => {
     const wasActive = this.isActivelyViewing;
     this.isActivelyViewing = document.visibilityState === 'visible';
     console.log(`[MapView] Visibility changed: User is ${this.isActivelyViewing ? 'actively viewing' : 'not viewing'} the app`);
-    
+
     if (!wasActive && this.isActivelyViewing) {
       // Coming back to foreground from background
       console.log('[MapView] App returning to foreground, ensuring polling is active');
-      
+
       // Check if polling is inactive but should be active
-      if (this.activeDivaMapForPolling.size > 0 && 
-          (this.pollingSubscription === undefined || 
-           this.pollingPausedInBackground || 
+      if (this.activeDivaMapForPolling.size > 0 &&
+          (this.pollingSubscription === undefined ||
+           this.pollingPausedInBackground ||
            (this.pollingSubscription && this.pollingSubscription.closed))) {
         console.log('[MapView] Restarting polling subscription after returning to foreground');
         this.pollingPausedInBackground = false; // Reset the flag
@@ -198,16 +198,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         return; // updateMonitoredStationsAndPoll already calls updatePollingInterval
       }
     }
-    
+
     // In all other cases, just update the interval
     this.updatePollingInterval();
   };
-  
+
   constructor() {
     // Set up visibility change detection for adaptive polling
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
-  
+
   ngOnInit(): void {
     this.mediaQueryList = window.matchMedia('(max-width: 599px)');
     this.isMobile = this.mediaQueryList.matches;
@@ -230,12 +230,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
   }
-  
+
   ngAfterViewInit(): void {
     console.log('View initialized, map container element:', this.mapContainer?.nativeElement);
     this.initializeMapWhenReady();
   }
-  
+
   ngOnDestroy(): void {
     this.componentDestroyed$.next();
     this.componentDestroyed$.complete();
@@ -261,12 +261,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         this.clickedStationHighlightMarker = null;
     }
 
-    this.stopPolling$.next(); 
+    this.stopPolling$.next();
     this.stopPolling$.complete();
     if (this.pollingSubscription) {
       this.pollingSubscription.unsubscribe();
     }
-    if (this.walkingTimeUpdateSubscription) { 
+    if (this.walkingTimeUpdateSubscription) {
       this.walkingTimeUpdateSubscription.unsubscribe();
     }
     if (this.locationErrorSubscription) {
@@ -278,20 +278,20 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     document.removeEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
   }
-  
+
   private initializeMapWhenReady(): void {
     if (this.mapsService.isGoogleMapsLoaded() && window.google && window.google.maps && window.google.maps.geometry) {
       console.log('Google Maps API and Geometry library are loaded, initializing map and CustomMapOverlayCtor...');
       this.CustomMapOverlayCtor = createCustomMapOverlayClass(window.google.maps);
       this.initMap();
       this.subscribeToLocationUpdates();
-      this.setupWalkingTimeUpdateTimer(); 
+      this.setupWalkingTimeUpdateTimer();
     } else {
       console.log('Google Maps API (or Geometry library) not loaded yet, checking again in 100ms');
       setTimeout(() => this.initializeMapWhenReady(), 100);
     }
   }
-  
+
   private initMap(): void {
     console.log('Initializing map...');
     const defaultCenter = { lat: 48.2082, lng: 16.3738 };
@@ -303,19 +303,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
-        gestureHandling: 'greedy' 
+        gestureHandling: 'greedy'
       };
       const googleMapsConfig = environment.googleMaps as ExtendedGoogleMapsConfig;
       if (googleMapsConfig?.mapId) {
         (mapOptions as any).mapId = googleMapsConfig.mapId;
       }
       this.map = new window.google.maps.Map(this.mapContainer.nativeElement, mapOptions);
-      
+
       // Add right-click listener to the map
       this.map.addListener('rightclick', (mapsMouseEvent: google.maps.MapMouseEvent) => {
         this.handleMapRightClick(mapsMouseEvent);
       });
-      
+
       window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
         console.log('Map fully loaded and ready');
         this.loadMetroLines();
@@ -326,7 +326,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.handleMapLoadingError('Error initializing map. Please try again.');
     }
   }
-  
+
   private handleMapLoadingError(message: string): void {
     this.hasLocationError = true;
     this.isLoading = false;
@@ -337,11 +337,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (mapsMouseEvent.latLng) {
       const lat = parseFloat(mapsMouseEvent.latLng.lat().toFixed(7));
       const lng = parseFloat(mapsMouseEvent.latLng.lng().toFixed(7));
-      const coordsString = `${lng}, ${lat}`; 
+      const coordsString = `${lng}, ${lat}`;
 
       navigator.clipboard.writeText(coordsString).then(() => {
         this.snackBar.open(`Coordinates copied: ${coordsString}`, 'Close', {
-          duration: 2000, 
+          duration: 2000,
         });
       }).catch(err => {
         console.error('Failed to copy coordinates: ', err);
@@ -420,7 +420,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (error: any) => {
         console.error('[MapView] Error receiving continuous location updates:', error);
         this.hasLocationError = true;
-        this.isLoading = false; 
+        this.isLoading = false;
         // locationAvailable$ should also emit false, triggering setupLocationErrorHandling if needed.
       }
     });
@@ -440,7 +440,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         console.log('MapViewComponent received location:', coordinates);
         this.hasLocationError = false;
-        this.isLoading = false; 
+        this.isLoading = false;
 
         const userLatLng = new google.maps.LatLng(coordinates.latitude, coordinates.longitude);
         if (!this.userMarker) {
@@ -477,7 +477,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         this.snackBar.open(`Error: ${message}`, 'Close', { duration: 5000 });
       }
     });
-    
+
     // Set up automatic recovery from location errors
     this.setupLocationErrorHandling();
   }
@@ -488,7 +488,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.locationErrorSubscription.unsubscribe();
       this.locationErrorSubscription = null;
     }
-    
+
     // Set up periodic check for location recovery when location error is active
     this.locationErrorSubscription = interval(10000) // Check every 10 seconds
       .pipe(
@@ -510,13 +510,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
   }
-  
+
   // Encapsulate location update processing logic to be called from subscribe
   private processLocationUpdate(coordinates: Coordinates, shouldFetchWalkingTimes: boolean): void {
     const newUserLatLng = new google.maps.LatLng(coordinates.latitude, coordinates.longitude);
 
     // Store the global state for walking time fetching
+    const previousShouldFetchWalkingTimes = this._shouldFetchWalkingTimesGlobal;
     this._shouldFetchWalkingTimesGlobal = shouldFetchWalkingTimes;
+
+    // Initialize lastWalkingTimeUpdateLocation if it's null and we should fetch walking times
+    if (!this.lastWalkingTimeUpdateLocation && shouldFetchWalkingTimes) {
+      console.log('[MapView] Initializing lastWalkingTimeUpdateLocation');
+      this.lastWalkingTimeUpdateLocation = newUserLatLng;
+    }
+
+    // If we're transitioning from not fetching to fetching walking times, trigger an immediate update
+    if (!previousShouldFetchWalkingTimes && shouldFetchWalkingTimes) {
+      console.log('[MapView] Speed dropped below threshold, re-enabling walking time updates');
+      this.lastWalkingTimeUpdateLocation = newUserLatLng; // Update to current location
+    }
 
     // Check if the received location is the exact same as the last one we processed
     if (this.lastProcessedLocationLatLng && newUserLatLng.equals(this.lastProcessedLocationLatLng)) {
@@ -544,6 +557,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.isLoading = false;
       this.hasLocationError = false; // Clear any previous error state
 
+      // Initialize lastWalkingTimeUpdateLocation for first fix
+      if (shouldFetchWalkingTimes) {
+        this.lastWalkingTimeUpdateLocation = newUserLatLng;
+      }
+
       this.fetchAndDisplayNearbySteige(coordinates, shouldFetchWalkingTimes) // Initial fetch
         .pipe(takeUntil(this.componentDestroyed$))
         .subscribe({
@@ -556,9 +574,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.userMarker.setPosition(newUserLatLng);
 
-      // Only re-fetch nearby steige and walking times if the location has genuinely changed by more than 50m.
-      if (!this.lastProcessedLocationLatLng || google.maps.geometry.spherical.computeDistanceBetween(newUserLatLng, this.lastProcessedLocationLatLng) > 50) {
-        console.log('[MapView] Location changed by more than 50m. Re-fetching nearby Steige and walking times.');
+      // Only re-fetch nearby steige and walking times if:
+      // 1. The location has genuinely changed by more than 50m, OR
+      // 2. We're transitioning from not fetching to fetching walking times
+      if (!this.lastProcessedLocationLatLng || 
+          google.maps.geometry.spherical.computeDistanceBetween(newUserLatLng, this.lastProcessedLocationLatLng) > 50 ||
+          (!previousShouldFetchWalkingTimes && shouldFetchWalkingTimes)) {
+        console.log('[MapView] Location changed significantly or walking times re-enabled. Re-fetching nearby Steige and walking times.');
+        
+        // Update lastWalkingTimeUpdateLocation if we're fetching walking times
+        if (shouldFetchWalkingTimes) {
+          this.lastWalkingTimeUpdateLocation = newUserLatLng;
+        }
+        
         this.fetchAndDisplayNearbySteige(coordinates, shouldFetchWalkingTimes)
           .pipe(takeUntil(this.componentDestroyed$))
           .subscribe({
@@ -577,6 +605,17 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           console.log(`[MapView] Large location jump detected (${Math.round(distance)}m). Recenter map with panTo.`);
           this.map.panTo(newUserLatLng);
           this.map.setZoom(15);
+
+          // For mobile view, find station with shortest walking time and display its overlay
+          if (this.isMobile) {
+            this.activeMobileOverlayStationId = null;
+            const stationWithShortestTime = this.findStationWithShortestWalkingTime();
+            if (stationWithShortestTime !== null) {
+              this.activeMobileOverlayStationId = stationWithShortestTime;
+              // Force a re-render of overlays to update the active mobile one
+              this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
+            }
+          }
         }
       }
     }
@@ -589,11 +628,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     return this.apiService.getNearbySteige(coordinates.latitude, coordinates.longitude, 800).pipe(
       takeUntil(this.componentDestroyed$),
-      tap((steige: NearbySteig[]) => { 
+      tap((steige: NearbySteig[]) => {
         console.log('[MapView] Received nearby Steige for overlay processing. Count:', steige.length);
         if (!this.map) {
             console.warn('[MapView] Map not available for displaying Steige-based highlights/overlays.');
-            return; 
+            return;
         }
 
         const uniqueHaltestellenDivaMap = new Map<number, string | number>();
@@ -612,18 +651,18 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
         this.updateMonitoredStationsAndPoll(uniqueHaltestellenDivaMap, shouldFetchWalkingTimes);
         this.createOverlaysForStations(uniqueHaltestellenDivaMap, null);
-      }), 
-      mapTo(undefined), 
-      catchError((error: any) => { 
+      }),
+      mapTo(undefined),
+      catchError((error: any) => {
         console.error('[MapView] Error fetching Steige for polling setup:', error);
         this.snackBar.open('Could not load nearby stop data for polling.', 'Close', { duration: 3000 });
-        this.clearHighlightsAndOverlays(); 
-        if (this.pollingSubscription) { 
+        this.clearHighlightsAndOverlays();
+        if (this.pollingSubscription) {
           this.pollingSubscription.unsubscribe();
         }
-        this.currentPollingDivasKey = ''; 
+        this.currentPollingDivasKey = '';
         this.activeDivaMapForPolling.clear();
-        return of(undefined); 
+        return of(undefined);
       })
     );
   }
@@ -631,25 +670,26 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private updateMonitoredStationsAndPoll(divaMapToUpdate: Map<number, string | number>, shouldFetchWalkingTimes: boolean, forceRestart: boolean = false): void {
     // Combine nearby stations with the clicked station (if any)
     const combinedDivaMap = new Map<number, string | number>([...divaMapToUpdate]);
-    
+
     // Add clicked station to the polling request if one exists
     if (this.clickedStationId !== null && this.clickedStationDiva !== null) {
       combinedDivaMap.set(this.clickedStationId, this.clickedStationDiva);
     }
-    
+
     const newDivaValues = Array.from(combinedDivaMap.values());
     const newPollingKey = this.generatePollingKey(combinedDivaMap);
 
-    if (!forceRestart && this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0) {
-      console.log('[MapView] Monitored DIVAs unchanged, polling continues for key:', newPollingKey);
+    // Only skip polling restart if DIVAs unchanged AND not fetching walking times
+    if (!forceRestart && this.currentPollingDivasKey === newPollingKey && newDivaValues.length > 0 && !shouldFetchWalkingTimes) {
+      console.log('[MapView] Monitored DIVAs unchanged and no walking time fetch needed, polling continues for key:', newPollingKey);
       return;
     }
-    
+
     if (this.pollingSubscription) {
       this.pollingSubscription.unsubscribe();
       console.log('[MapView] Stopped previous real-time polling due to DIVA set change or becoming empty.');
     }
-    if (this.walkingTimeUpdateSubscription) { 
+    if (this.walkingTimeUpdateSubscription) {
         this.walkingTimeUpdateSubscription.unsubscribe();
         console.log('[MapView] Stopped previous walking time timer due to DIVA set change.');
     }
@@ -659,10 +699,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (forceRestart || oldNearbyPollingKey !== newNearbyPollingKey) {
       console.log('[MapView] Nearby station set changed or forceRestart. Clearing nearby overlays.');
     }
-    
+
     this.currentPollingDivasKey = newPollingKey;
     this.activeDivaMapForPolling = new Map(combinedDivaMap);
-    
+
     this.lastETag = null;
 
     if (newDivaValues.length === 0) {
@@ -693,13 +733,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    const walkingTimesObservable: Observable<google.maps.DistanceMatrixResponse | null> = 
-      (userLocationLiteral && stationTargets.length > 0)
-        ? this.mapsService.getWalkingDurationsToStations(userLocationLiteral, stationTargets.map(st => st.latLng))
-        : of(null);
+    console.log('[MapView] Station targets:', stationTargets);
+    console.log('[MapView] User location literal:', userLocationLiteral);
+    console.log('[MapView] Should fetch walking times:', shouldFetchWalkingTimes);
 
     if (userLocationLiteral && stationTargets.length > 0) {
-      this.fetchAndStoreWalkingTimes(userLocationLiteral, stationTargets, shouldFetchWalkingTimes); 
+      this.fetchAndStoreWalkingTimes(userLocationLiteral, stationTargets, shouldFetchWalkingTimes);
     } else {
       this.stationWalkingTimes.clear();
       this.lastWalkingTimeUpdateLocation = null;
@@ -708,25 +747,25 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
       }
     }
-    
+
     // Determine optimal polling interval based on context
     this.updatePollingInterval();
-    
+
     console.log(`[MapView] Setting up polling with interval: ${this.pollingIntervalMs}ms (${this.pollingIntervalMs / 1000}s)`);
-    
+
     this.pollingSubscription = timer(0, this.pollingIntervalMs).pipe(
       takeUntil(this.stopPolling$),
       exhaustMap(() => {
         this.updatePollingInterval();
-        
+
         console.log('[MapView] Fetching real-time data for stations:', newDivaValues);
-        
+
         // Include ETag header if available to support 304 Not Modified responses
         const headers: Record<string, string> = {};
         if (this.lastETag) {
           headers['If-None-Match'] = this.lastETag;
         }
-        
+
         return this.apiService.getRealTimeDepartures(newDivaValues, headers).pipe(
           tap((response: any) => {
             // Check if this is a 304 Not Modified response
@@ -742,7 +781,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
               this.lastETag = response.headers.etag;
               console.log(`[MapView] Stored new ETag: ${this.lastETag}`);
             }
-            
+
             if (response && response.data?.monitors) {
               console.log(`[MapView] Received monitor data with ${response.data.monitors.length} station groups`);
               // Log the metro lines received for debugging
@@ -757,7 +796,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           }),
           catchError((err: any) => {
             console.error('[MapView] Error fetching monitor data:', err);
-            this.isLoadingClickedStationData = false; 
+            this.isLoadingClickedStationData = false;
             this.clearHighlightsAndOverlays();
             this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
             this.lastMonitorResponse = null;
@@ -770,14 +809,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         console.log('[MapView] Using cached data (304 Not Modified)');
         return;
       }
-      
+
       if (monitorResponse && !(monitorResponse as any).errorOccurred) {
         this.lastMonitorResponse = monitorResponse;
       } else {
-        this.lastMonitorResponse = null; 
+        this.lastMonitorResponse = null;
       }
       this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
-      
+
       // After new data arrives, update the polling interval again
       this.updatePollingInterval();
     });
@@ -790,8 +829,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.walkingTimeUpdateSubscription.unsubscribe();
     }
     this.walkingTimeUpdateSubscription = timer(this.WALKING_TIME_UPDATE_INTERVAL_MS, this.WALKING_TIME_UPDATE_INTERVAL_MS).pipe(
-      takeUntil(this.componentDestroyed$), 
-      takeUntil(this.stopPolling$) 
+      takeUntil(this.componentDestroyed$),
+      takeUntil(this.stopPolling$)
     ).subscribe(() => {
       this.checkUserMovementAndFetchWalkingTimes();
     });
@@ -810,8 +849,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     if (!this.lastWalkingTimeUpdateLocation) {
       console.log('[MapView] Walking time check: No previous location for comparison. Initial fetch should handle this.');
-      // On initial load or after significant movement, fetchAndStoreWalkingTimes is called by processLocationUpdate.
-      // We don't need to do it here if lastWalkingTimeUpdateLocation is null.
+      // Initialize lastWalkingTimeUpdateLocation if it's null
+      this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(
+        currentUserLocation.lat(),
+        currentUserLocation.lng()
+      );
+      console.log('[MapView] Initialized lastWalkingTimeUpdateLocation to:', this.lastWalkingTimeUpdateLocation.toString());
       return;
     }
     if (this.activeDivaMapForPolling.size === 0) {
@@ -826,8 +869,22 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
     console.log(`[MapView] Walking time check: Distance moved since last update: ${distanceMoved.toFixed(2)}m`);
 
-    if (distanceMoved > this.MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M) {
-      console.log('[MapView] User moved significantly. Fetching updated walking times.');
+    // Check if we need to re-enable walking time fetching (even if user hasn't moved)
+    let shouldFetchWalkingTimes = false;
+    if (!this._shouldFetchWalkingTimesGlobal) {
+      console.log('[MapView] Walking time fetching was disabled, checking if we should re-enable it');
+      // Re-enable walking time fetching
+      this._shouldFetchWalkingTimesGlobal = true;
+      this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(
+        currentUserLocation.lat(),
+        currentUserLocation.lng()
+      );
+      console.log('[MapView] Re-enabled walking time fetching and reset lastWalkingTimeUpdateLocation');
+      shouldFetchWalkingTimes = true; // Force a fetch when re-enabling
+    }
+
+    if (distanceMoved > this.MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M || shouldFetchWalkingTimes) {
+      console.log('[MapView] User moved significantly or walking times were re-enabled. Fetching updated walking times.');
       const stationTargets: { stationId: number; latLng: google.maps.LatLngLiteral }[] = [];
       this.activeDivaMapForPolling.forEach((_diva, stationId) => {
         // Only include stations that are *not* the currently clicked station for walking times
@@ -839,12 +896,25 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           }
         }
       });
-      
+
       if (stationTargets.length > 0) {
-        this.fetchAndStoreWalkingTimes({ lat: currentUserLocation.lat(), lng: currentUserLocation.lng() }, stationTargets, this._shouldFetchWalkingTimesGlobal);
+        // Update the last walking time update location before fetching new times
+        this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(
+          currentUserLocation.lat(),
+          currentUserLocation.lng()
+        );
+        console.log('[MapView] Updated lastWalkingTimeUpdateLocation before fetch:', this.lastWalkingTimeUpdateLocation.toString());
+
+        // Fetch new walking times
+        this.fetchAndStoreWalkingTimes(
+          { lat: currentUserLocation.lat(), lng: currentUserLocation.lng() },
+          stationTargets,
+          this._shouldFetchWalkingTimesGlobal
+        );
       } else {
-        // If no nearby stations, clear walking times
+        // If no nearby stations, clear walking times but keep lastWalkingTimeUpdateLocation
         this.stationWalkingTimes.clear();
+        console.log('[MapView] No stations to update, keeping lastWalkingTimeUpdateLocation:', this.lastWalkingTimeUpdateLocation.toString());
         this.clearHighlightsAndOverlays();
         this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
       }
@@ -852,11 +922,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       console.log('[MapView] User has not moved significantly. No walking time update needed.');
     }
   }
-  
+
   private fetchAndStoreWalkingTimes(
-    userLocationLiteral: google.maps.LatLngLiteral, 
+    userLocationLiteral: google.maps.LatLngLiteral,
     stationTargets: { stationId: number; latLng: google.maps.LatLngLiteral }[],
-    shouldFetchWalkingTimes: boolean 
+    shouldFetchWalkingTimes: boolean
   ): void {
     // Only proceed if shouldFetchWalkingTimes is true
     if (!shouldFetchWalkingTimes) {
@@ -871,37 +941,37 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       destinations: stationTargets.map(st => st.latLng)
     };
 
+    console.log('[MapView] Walking time fetch Payload:', payload);
     this.apiService.getSecureWalkingMatrix(payload)
       .pipe(
         takeUntil(this.componentDestroyed$),
         catchError(err => {
           console.error('[MapView] Error fetching secure walking matrix:', err);
           if (this.lastWalkingTimeUpdateLocation) {
-            this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(userLocationLiteral.lat, userLocationLiteral.lng);
-            console.log('[MapView] Updated lastWalkingTimeUpdateLocation (on error) to:', userLocationLiteral);
+            console.log('[MapView] Keeping lastWalkingTimeUpdateLocation on error:', this.lastWalkingTimeUpdateLocation.toString());
           }
-          this.stationWalkingTimes.clear(); 
+          this.stationWalkingTimes.clear();
           this.clearHighlightsAndOverlays();
           this.createOverlaysForStations(this.activeDivaMapForPolling, this.lastMonitorResponse);
-          return of(null); 
+          return of(null);
         })
       )
-      .subscribe(matrixResponse => { 
-        if (!matrixResponse) { 
+      .subscribe(matrixResponse => {
+        if (!matrixResponse) {
             return;
         }
 
         // Successful response from backend (which proxied Google)
         if (this.lastWalkingTimeUpdateLocation) {
-        this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(userLocationLiteral.lat, userLocationLiteral.lng);
-        console.log('[MapView] Updated lastWalkingTimeUpdateLocation to:', userLocationLiteral);
+          this.lastWalkingTimeUpdateLocation = new google.maps.LatLng(userLocationLiteral.lat, userLocationLiteral.lng);
+          console.log('[MapView] Updated lastWalkingTimeUpdateLocation to:', userLocationLiteral);
         }
 
         const newWalkingTimes = new Map<number, number>();
         if (matrixResponse.rows && matrixResponse.rows.length > 0) {
-          matrixResponse.rows[0].elements.forEach((element: any, index: number) => { 
+          matrixResponse.rows[0].elements.forEach((element: any, index: number) => {
             const targetStation = stationTargets[index];
-            if (targetStation && element.status === 'OK' && element.duration) { 
+            if (targetStation && element.status === 'OK' && element.duration) {
               const durationInMinutes = Math.round(element.duration.value / 60);
               newWalkingTimes.set(targetStation.stationId, durationInMinutes);
             } else {
@@ -946,11 +1016,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private createOverlaysForStations(
-    stationDivaMap: Map<number, string | number>, 
+    stationDivaMap: Map<number, string | number>,
     monitorResponse: MonitorApiResponse | null
   ): void {
     const combinedStationDivaMap = new Map<number, string | number>([...stationDivaMap]);
-    
+
     if (this.clickedStationId !== null && this.clickedStationDiva !== null && !combinedStationDivaMap.has(this.clickedStationId)) {
       combinedStationDivaMap.set(this.clickedStationId, this.clickedStationDiva);
     }
@@ -986,7 +1056,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         validLineBezeichnungen.add(line.bezeichnung);
       });
     }
-    console.log('[MapView] Valid line Bezeichnungen for filtering departures:', Array.from(validLineBezeichnungen));
 
     const stationsToKeep = new Set<number>();
 
@@ -1061,18 +1130,34 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           validLineBezeichnungen,
           walkingTimeInMinutes,
           isClickedStationNow,
-          this.isLoadingClickedStationData // Pass loading state to content generator
+          this.isLoadingClickedStationData
         );
 
         if (existingOverlay) {
           // Update existing overlay content
           existingOverlay.setContent(overlayContent);
+          // Add click handler to prevent click-through
+          const overlayElement = existingOverlay.getDiv();
+          if (overlayElement) {
+            google.maps.event.clearListeners(overlayElement, 'click');
+            overlayElement.addEventListener('click', (event) => {
+              event.stopPropagation();
+            });
+          }
         } else {
           // Create new overlay
           try {
             const position = originalStationMarker.getPosition()!;
             const newOverlay = new this.CustomMapOverlayCtor(position, overlayContent);
             newOverlay.setMap(this.map);
+
+            // Add click handler to prevent click-through
+            const overlayElement = newOverlay.getDiv();
+            if (overlayElement) {
+              overlayElement.addEventListener('click', (event) => {
+                event.stopPropagation();
+              });
+            }
 
             if (isClickedStationNow) {
               this.clickedStationOverlay = newOverlay;
@@ -1124,20 +1209,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
                     // For mobile view, reset activeMobileOverlayStationId and find station with shortest walking time
                     if (this.isMobile) {
                       this.activeMobileOverlayStationId = null;
-                      let minWalkingTime = Number.POSITIVE_INFINITY;
-                      let stationWithShortestTime: number | null = null;
-                      
-                      this.activeDivaMapForPolling.forEach((_diva, stationId) => {
-                        const walkingTime = this.stationWalkingTimes.get(stationId);
-                        if (walkingTime !== undefined && walkingTime < minWalkingTime) {
-                          minWalkingTime = walkingTime;
-                          stationWithShortestTime = stationId;
-                        }
-                      });
-
+                      const stationWithShortestTime = this.findStationWithShortestWalkingTime();
                       if (stationWithShortestTime !== null) {
                         this.activeMobileOverlayStationId = stationWithShortestTime;
-                        console.log(`[MapView] Reset to station with shortest walking time (${minWalkingTime} min): ${stationWithShortestTime}`);
                       }
                     }
 
@@ -1346,21 +1420,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   recenterMap(): void {
     if (!this.map || !this.userMarker) return;
-    
+
     const userPosition = this.userMarker.getPosition();
     if (userPosition) {
       this.map.setCenter(userPosition);
       this.map.setZoom(15);
     }
   }
-  
+
   toggleMetroLines(): void {
     this.showMetroLines = !this.showMetroLines;
     this.metroLinePolylines.forEach(polyline => {
       polyline.setVisible(this.showMetroLines);
     });
   }
-  
+
   toggleStations(): void {
     this.showStations = !this.showStations;
     this.stationMarkers.forEach(marker => {
@@ -1371,16 +1445,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.activeInfoWindow = null;
     }
   }
-  
+
   private loadMetroLines(): void {
     this.clearMetroLines();
     this.clearStationMarkers();
-    
+
     this.apiService.getMetroLineStops().pipe(
       takeUntil(this.componentDestroyed$),
       tap(response => { // Store the response for later use
         if (response) {
-          this.lineStopsData = response; 
+          this.lineStopsData = response;
           console.log('[MapView] Metro line and stops data loaded and stored.');
         }
       }),
@@ -1396,7 +1470,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.addStationMarkers(response); // Pass response directly
     });
   }
-  
+
   private drawMetroLines(response: LineStopsResponse): void {
     Object.entries(response.lines).forEach(([lineId, line]) => {
       if (line.lineStrings && line.lineStrings.length > 0) {
@@ -1427,12 +1501,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
   }
-  
+
   private clearMetroLines(): void {
     this.metroLinePolylines.forEach(polyline => polyline.setMap(null));
     this.metroLinePolylines = [];
   }
-  
+
   private clearStationMarkers(): void {
     if (this.activeInfoWindow) {
       this.activeInfoWindow.close();
@@ -1443,7 +1517,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.stationMarkerMap.clear();
     this.highlightedStationIds.clear();
   }
-  
+
   private generatePollingKey(divaMap: Map<number, string | number>): string {
     if (!divaMap || divaMap.size === 0) {
       return '';
@@ -1459,16 +1533,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       const lineColor = line.farbe || '#000000';
       const features = line.stops.features;
       if (!features || features.length === 0) return;
-      
+
       features.forEach(feature => {
         const stationId = feature.properties.haltestellen_id;
         if (processedStationIds.has(stationId)) return;
         processedStationIds.add(stationId);
-        
+
         const [lng, lat] = feature.geometry.coordinates;
         const stationName = feature.properties.name;
         const diva = feature.properties.diva;
-        
+
         const stationLines = feature.properties.linien_ids
           .filter((id, index, self) => self.indexOf(id) === index)
           .map(id => {
@@ -1476,9 +1550,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             return lineObj ? { id, name: lineObj.bezeichnung, color: lineObj.farbe } : null;
           })
           .filter(lineInfo => lineInfo !== null) as { id: string; name: string; color: string | undefined }[];
-        
+
         const strokeColor = stationLines.length >= 2 ? '#000000' : lineColor;
-        
+
         const marker = new google.maps.Marker({
           position: { lat, lng },
           map: this.map,
@@ -1493,7 +1567,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           },
           visible: this.showStations
         });
-        
+
         const infoContent = `
           <div class="gm-station-info">
             <h3>${stationName}</h3>
@@ -1506,9 +1580,9 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
             </div>
           </div>
         `;
-        
+
         marker.addListener('click', () => this.handleStationClick(stationId));
-        
+
         this.stationMarkers.push(marker);
         this.stationMarkerMap.set(stationId, { marker, diva });
       });
@@ -1640,5 +1714,23 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     console.log(`[handleStationClick] Function finished for stationId: ${stationId}. Final clickedStationId: ${this.clickedStationId}`);
+  }
+
+  private findStationWithShortestWalkingTime(): number | null {
+    let minWalkingTime = Number.POSITIVE_INFINITY;
+    let stationWithShortestTime: number | null = null;
+    
+    this.activeDivaMapForPolling.forEach((_diva, stationId) => {
+      const walkingTime = this.stationWalkingTimes.get(stationId);
+      if (walkingTime !== undefined && walkingTime < minWalkingTime) {
+        minWalkingTime = walkingTime;
+        stationWithShortestTime = stationId;
+      }
+    });
+
+    if (stationWithShortestTime !== null) {
+      console.log(`[MapView] Found station with shortest walking time (${minWalkingTime} min): ${stationWithShortestTime}`);
+    }
+    return stationWithShortestTime;
   }
 }
