@@ -104,9 +104,20 @@
       color: #007bff;
       text-decoration: none;
       margin: 0 5px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
 
       &:hover {
-        text-decoration: underline;
+        color: #0056b3;
+        background-color: rgba(0, 123, 255, 0.1);
+        text-decoration: none;
+      }
+
+      &:active {
+        background-color: rgba(0, 123, 255, 0.2);
       }
     }
   }

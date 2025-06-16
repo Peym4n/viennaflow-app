@@ -17,6 +17,7 @@ import { map, distinctUntilChanged, catchError, tap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment'; // Adjust path if needed
 
 import { ProfileService } from './profile.service'; // Added import
+import { SupabaseService } from './supabase.service';
 
 @Injectable({
   providedIn: 'root',
@@ -35,7 +36,7 @@ export class AuthService {
     distinctUntilChanged()
   );
 
-  constructor(private injector: Injector) { // Injected Injector instead of ProfileService
+  constructor(private injector: Injector, private supabaseService: SupabaseService) { // Injected Injector instead of ProfileService
     if (!environment.supabase.url || !environment.supabase.anonKey) {
       throw new Error('Supabase URL and Anon Key must be provided in environment.ts');
     }
@@ -155,5 +156,39 @@ export class AuthService {
   // Be mindful of exposing the whole client, often better to wrap specific db calls in services.
   getSupabaseClient(): SupabaseClient {
     return this.supabase;
+  }
+
+  resetPassword(email: string): Observable<void> {
+    return from(this.supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`
+    })).pipe(
+      map(response => {
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+      })
+    );
+  }
+
+  updatePassword(newPassword: string): Observable<void> {
+    return from(this.supabase.auth.updateUser({
+      password: newPassword
+    })).pipe(
+      map(response => {
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+      })
+    );
+  }
+
+  setSession(accessToken: string): void {
+    this.supabaseService.setSession({
+      access_token: accessToken,
+      refresh_token: '',
+      expires_at: 0,
+      expires_in: 0,
+      token_type: 'bearer'
+    });
   }
 }

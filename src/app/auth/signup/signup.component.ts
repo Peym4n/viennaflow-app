@@ -1,9 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service'; // Adjust path if core services are elsewhere
 import { AuthTokenResponsePassword, AuthError } from '@supabase/supabase-js';
 import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
 
 // Custom validator for password matching
 export function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
@@ -19,7 +20,7 @@ export function passwordMatchValidator(control: AbstractControl): ValidationErro
 @Component({
   selector: 'app-signup',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatButtonModule],
   templateUrl: './signup.component.html',
   styleUrls: ['./signup.component.scss']
 })

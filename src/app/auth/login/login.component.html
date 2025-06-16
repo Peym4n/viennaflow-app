@@ -3,7 +3,7 @@
   <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
     <div class="form-field">
       <label for="email">Email</label>
-      <input id="email" type="email" formControlName="email" placeholder="your@email.com">
+      <input id="email" type="email" formControlName="email" placeholder="your@email.com" autocomplete="email">
       <div *ngIf="email?.invalid && (email?.dirty || email?.touched)" class="error-message">
         <small *ngIf="email?.errors?.['required']">Email is required.</small>
         <small *ngIf="email?.errors?.['email']">Please enter a valid email address.</small>
@@ -12,7 +12,7 @@
 
     <div class="form-field">
       <label for="password">Password</label>
-      <input id="password" type="password" formControlName="password" placeholder="Password">
+      <input id="password" type="password" formControlName="password" placeholder="Password" autocomplete="current-password">
       <div *ngIf="password?.invalid && (password?.dirty || password?.touched)" class="error-message">
         <small *ngIf="password?.errors?.['required']">Password is required.</small>
         <small *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters long.</small>
@@ -30,8 +30,8 @@
   </form>
 
   <p class="additional-links">
-    Don't have an account? <a routerLink="/auth/signup">Sign Up</a>
+    Don't have an account? <a [routerLink]="['/auth/signup']" class="link-button">Sign Up</a>
     <br>
-    <a routerLink="/auth/forgot-password">Forgot Password?</a> <!-- Add this link later if needed -->
+    <a [routerLink]="['/auth/forgot-password']" class="link-button">Forgot Password?</a>
   </p>
 </div>

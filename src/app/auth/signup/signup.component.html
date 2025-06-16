@@ -4,7 +4,7 @@
     <form [formGroup]="signupForm" (ngSubmit)="onSubmit()" novalidate>
     <div class="form-field">
       <label for="email">Email</label>
-      <input id="email" type="email" formControlName="email" placeholder="your@email.com">
+      <input id="email" type="email" formControlName="email" placeholder="your@email.com" autocomplete="email">
       <div *ngIf="email?.invalid && (email?.dirty || email?.touched)" class="error-message">
         <small *ngIf="email?.errors?.['required']">Email is required.</small>
         <small *ngIf="email?.errors?.['email']">Please enter a valid email address.</small>
@@ -13,7 +13,7 @@
 
     <div class="form-field">
       <label for="password">Password</label>
-      <input id="password" type="password" formControlName="password" placeholder="Choose a password (min. 6 characters)">
+      <input id="password" type="password" formControlName="password" placeholder="Choose a password (min. 6 characters)" autocomplete="new-password">
       <div *ngIf="password?.invalid && (password?.dirty || password?.touched)" class="error-message">
         <small *ngIf="password?.errors?.['required']">Password is required.</small>
         <small *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters long.</small>
@@ -22,7 +22,7 @@
 
     <div class="form-field">
       <label for="confirmPassword">Confirm Password</label>
-      <input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="Confirm your password">
+      <input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="Confirm your password" autocomplete="new-password">
       <div *ngIf="confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)" class="error-message">
         <small *ngIf="confirmPassword?.errors?.['required']">Confirming your password is required.</small>
       </div>
@@ -44,13 +44,13 @@
   </form>
 
     <p class="additional-links">
-      Already have an account? <a routerLink="/auth/login">Login</a>
+      Already have an account? <a [routerLink]="['/auth/login']" class="link-button">Login</a>
     </p>
   </ng-container>
 
   <div *ngIf="successMessage" class="success-message server-success">
     <h3>Registration Successful!</h3>
     <p>{{ successMessage }}</p>
-    <a mat-stroked-button routerLink="/auth/login">Go to Login</a>
+    <button mat-stroked-button [routerLink]="['/auth/login']">Go to Login</button>
   </div>
 </div>
