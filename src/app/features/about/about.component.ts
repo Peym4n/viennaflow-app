@@ -9,7 +9,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
   styleUrls: ['./about.component.css'] // Corrected to styleUrls
 })
 export class AboutComponent implements OnInit {
-  private readonly aboutUrl = 'http://localhost:5173/about-embed?lang=de';
+  private readonly aboutUrl = 'https://viennaflow.at/about-embed?lang=en';
   sanitizedAboutUrl!: SafeResourceUrl;
 
   constructor(private sanitizer: DomSanitizer) {}
