@@ -28,6 +28,7 @@
       </button>
 
       <!-- Auth links for Desktop -->
+      <!-- Temporarily commented out
       <ng-container *ngIf="!(isLoggedIn$ | async)">
         <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">
           <mat-icon>person_add</mat-icon>
@@ -38,6 +39,7 @@
           <span>Login</span>
         </button>
       </ng-container>
+      -->
 
       <ng-container *ngIf="isLoggedIn$ | async">
         <button mat-button routerLink="/profile" routerLinkActive="active-link">
@@ -82,6 +84,7 @@
         <mat-icon>info</mat-icon> Imprint
       </a>
       <!-- Auth links for Mobile -->
+      <!-- Temporarily commented out
       <ng-container *ngIf="!(isLoggedIn$ | async)">
         <mat-divider></mat-divider>
         <button mat-menu-item (click)="navigateTo('/auth/signup')">
@@ -91,6 +94,7 @@
           <mat-icon>login</mat-icon> Login
         </button>
       </ng-container>
+      -->
       <ng-container *ngIf="isLoggedIn$ | async">
         <mat-divider></mat-divider>
         <button mat-menu-item (click)="navigateTo('/profile')">
