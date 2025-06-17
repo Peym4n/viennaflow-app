@@ -132,3 +132,74 @@
   }
 }
 
+/* Styles for "NOW" indicator with pulsing dot */
+/* Styles for "NOW" indicator (now part of line-countdown-item) - will be a container for blinking dots */
+.custom-map-overlay .real-time-data .departure-line .line-countdown-item.line-countdown-now.blinking-dots-container {
+  display: flex; /* Changed to flex for column direction */
+  flex-direction: column; /* Stack dots vertically */
+  align-items: center; /* Center dots horizontally in the column */
+  justify-content: center; /* Center dots vertically if container has more height */
+  /* No color or font-weight needed here as it's just a container for dots */
+  /* Adjust line-height or height of this container if necessary to fit with other countdown text */
+  line-height: normal; /* Reset line-height if inherited */
+  min-width: 10px; /* Ensure it has some width to contain the dots */
+}
+
+/* Remove padding-left from .blinking-dots-container if it's not the first child */
+.custom-map-overlay .real-time-data .departure-line .countdown-wrapper .line-countdown-item.blinking-dots-container:not(:first-child) {
+  padding-left: 0;
+}
+
+.custom-map-overlay .real-time-data .departure-line .blinking-dot {
+  width: 6px; /* Smaller dot size */
+  height: 6px;
+  background-color: #28a745; /* Green color for dots */
+  border-radius: 50%;
+  margin: 1px 0; /* Vertical spacing between dots */
+  animation: blink-interchange 1s infinite;
+}
+
+.custom-map-overlay .real-time-data .departure-line .blinking-dot.dot2 {
+  animation-delay: 0.5s; /* Offset the second dot's animation */
+}
+
+.custom-map-overlay .real-time-data .departure-line .countdown-separator {
+  margin: 0 4px; /* Adds 4px space on left and right of the pipe */
+  color: #888; /* Softer color for the separator */
+}
+
+@keyframes blink-interchange {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* Loading Line Indicator Styles */
+.custom-map-overlay .loading-line-indicator {
+  height: 2px; /* Thin line */
+  background-color: #e0e0e0; /* Light gray when not active */
+  width: 100%;
+  margin: 6px 0;
+  overflow: hidden; /* Hide the gradient overflow during animation */
+  border-radius: 1px;
+}
+
+.custom-map-overlay .loading-line-indicator.loading-active {
+  background: linear-gradient(90deg, #e0e0e0 0%, #4285F4 50%, #e0e0e0 100%); /* Blue gradient */
+  background-size: 200% 100%; /* Make gradient wider than the line */
+  animation: loading-sweep 1.5s linear infinite; /* Animation */
+}
+
+@keyframes loading-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+/* === End Styles for Custom Map Overlay Content === */
+
