@@ -19,6 +19,7 @@ yarn-error.log
 .c9/
 *.launch
 .settings/
+.windsurfrules
 *.sublime-workspace
 
 # Visual Studio Code
