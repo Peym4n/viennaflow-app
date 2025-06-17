@@ -34,27 +34,8 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
       this.content.style.pointerEvents = 'auto';
       this.content.style.zIndex = '1000';
       
-      // Create inner content
-      const innerContent = document.createElement('div');
-      innerContent.innerHTML = typeof content === 'string' ? content : content.innerHTML;
-      this.content.appendChild(innerContent);
-
-      // Extract station ID from content if it exists
-      const closeButton = innerContent.querySelector('.overlay-close-button');
-      if (closeButton) {
-        const stationIdAttr = closeButton.getAttribute('data-station-id');
-        if (stationIdAttr) {
-          this.stationId = parseInt(stationIdAttr, 10);
-          this.closeButtonHandler = (e: Event) => {
-            console.log('[MapView] Close button clicked for station:', this.stationId);
-            e.stopPropagation();
-            window.dispatchEvent(new CustomEvent('closeOverlay', { 
-              detail: { stationId: this.stationId } 
-            }));
-          };
-          closeButton.addEventListener('click', this.closeButtonHandler);
-        }
-      }
+      // Set initial content
+      this.setContent(content);
     }
 
     override onAdd(): void {
@@ -100,6 +81,7 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
         }
       }
 
+      // Set new content
       this.content.innerHTML = typeof content === 'string' ? content : content.innerHTML;
       
       // Add new event listener
@@ -117,6 +99,10 @@ export function createCustomMapOverlayClass(mapsApi: typeof google.maps): Custom
           };
           closeButton.addEventListener('click', this.closeButtonHandler);
         }
+      }
+      // Redraw the overlay to update position if content size changed
+      if (this.map) {
+        this.draw();
       }
     }
 

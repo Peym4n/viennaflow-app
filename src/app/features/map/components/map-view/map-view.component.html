@@ -1,35 +1,32 @@
-<div class="map-container">
-  <!-- Google Map Container -->
-  <div #mapContainer class="google-map"></div>
+<div #mapContainer class="google-map"></div>
 
-  <!-- Loading Overlay -->
-  @if (isLoading) {
-    <div class="loading-overlay">
-      <mat-spinner diameter="48" color="accent"></mat-spinner>
-      <p class="loading-text">Getting your location...</p>
-    </div>
-  }
-
-  <!-- Location Error Message -->
-  @if (hasLocationError) {
-    <div class="location-alert">
-      <mat-icon class="location-alert-icon">location_disabled</mat-icon>
-      <span>Please enable location services to use this app</span>
-    </div>
-  }
-
-  <!-- Map Controls -->
-  <div class="map-controls">
-    <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()" class="control-button">
-      <mat-icon>my_location</mat-icon>
-    </button>
-    <button mat-fab aria-label="Toggle metro lines" (click)="toggleMetroLines()" 
-            class="control-button" [class.toggle-active]="showMetroLines" [class.toggle-inactive]="!showMetroLines">
-      <mat-icon>subway</mat-icon>
-    </button>
-    <button mat-fab aria-label="Toggle station markers" (click)="toggleStations()" 
-            class="control-button" [class.toggle-active]="showStations" [class.toggle-inactive]="!showStations">
-      <mat-icon>place</mat-icon>
-    </button>
+<!-- Loading Overlay -->
+@if (mapManager.currentState.isLoading) {
+  <div class="loading-overlay">
+    <mat-spinner diameter="48" color="accent"></mat-spinner>
+    <p class="loading-text">Getting your location...</p>
   </div>
+}
+
+<!-- Location Error Message -->
+@if (locationManager.currentState.error) {
+  <div class="location-alert">
+    <mat-icon class="location-alert-icon">location_disabled</mat-icon>
+    <span>{{ locationManager.currentState.error }}</span>
+  </div>
+}
+
+<!-- Map Controls -->
+<div class="map-controls">
+  <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()" class="control-button">
+    <mat-icon>my_location</mat-icon>
+  </button>
+  <button mat-fab aria-label="Toggle metro lines" (click)="toggleMetroLines()"
+          class="control-button" [class.toggle-active]="mapManager.currentState.showMetroLines" [class.toggle-inactive]="!mapManager.currentState.showMetroLines">
+    <mat-icon>subway</mat-icon>
+  </button>
+  <button mat-fab aria-label="Toggle station markers" (click)="toggleStations()"
+          class="control-button" [class.toggle-active]="mapManager.currentState.showStations" [class.toggle-inactive]="!mapManager.currentState.showStations">
+    <mat-icon>place</mat-icon>
+  </button>
 </div>

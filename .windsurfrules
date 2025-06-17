@@ -34,6 +34,16 @@
 - Environment configuration using dotenvx for managing API keys
 - Custom environment generation script (scripts/generate-env.js)
 - Google Maps API integration
+- **Service Architecture:**
+    - `MapManagerService`: Handles map initialization, user location marker, and map state
+    - `StationManagerService`: Manages station data, nearby stations, and station state
+    - `LocationManagerService`: Handles location updates, walking times, and location state
+    - `PollingService`: Manages real-time data polling with background/foreground awareness
+    - `OverlayManagerService`: Handles overlay creation, updates, and smart station selection
+- **State Management:**
+    - Each service uses a state pattern with BehaviorSubject to manage its own state
+    - Services communicate through well-defined interfaces and state objects
+    - State changes trigger appropriate UI updates through subscriptions
 - **Custom Map Elements:**
     - Implements custom HTML map overlays by extending `google.maps.OverlayView` for richer content than standard InfoWindows.
     - Uses a **factory pattern** for creating these custom overlay classes. This is crucial to correctly manage the dependency on the Google Maps API, ensuring it's loaded before the overlay class (which extends a Maps API class) is defined.
@@ -131,3 +141,96 @@
 - `@supabase/supabase-js`: v2.70.0
 - Angular Services: [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1), [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1) for managing auth state and profile data.
 - Supabase RLS: Row Level Security policies are in place for `profiles` and `user_favorite_stations` tables to ensure users can only access/modify their own data.
+
+## Expected Behaviors
+
+### Map Initialization and Location Handling
+1. **Initial Map Load:**
+   - Shows overview of Vienna with all metro line endpoints visible
+   - Uses predefined initial position and zoom level
+   - When user's location is first detected:
+     - Map pans and zooms to user location
+     - Fetches nearby stations and shows markers
+     - Fetches walking times and real-time data concurrently
+     - Shows overlays based on smart selection logic once walking times are available
+     - Shows loading state in overlays until real-time data arrives
+
+2. **Location Change Handling:**
+   - **Small Changes (< 50m):**
+     - No action if speed is below walking threshold (2.5 m/s)
+     - Only monitor data polling continues
+   - **Significant Changes (> 50m):**
+     - Fetches nearby stations and walking times
+     - Updates default open overlays (3 on desktop, 1 on mobile) using smart selection
+   - **High Speed Movement:**
+     - Hides walking times but continues fetching them
+     - Shows walking times again when speed drops below threshold
+   - **Large Changes (> 1km):**
+     - Treated as initial load
+     - Clears and recreates all nearby station data
+     - Pans and zooms map to new location
+
+### Station Interaction
+1. **Non-Nearby Station Click:**
+   - **Desktop:**
+     - Adds station to real-time data polling list
+     - Opens overlay immediately with loading state
+     - Includes close button
+   - **Mobile:**
+     - Closes other open overlays
+     - Shows only clicked station's overlay
+     - When closed, uses smart selection to show closest station's overlay
+
+2. **Nearby Station Click:**
+   - **Desktop:**
+     - Opens overlay immediately with existing data
+     - Can be closed (not part of default open overlays)
+   - **Mobile:**
+     - Closes other overlays
+     - Shows only clicked station's overlay with existing data
+
+3. **Smart Station Selection:**
+   - Groups stations by line (including each direction separately)
+   - For each line, selects station with shortest walking distance
+   - Merges and deduplicates selected stations
+   - Chooses top 3 closest for desktop, 1 closest for mobile
+   - Considers stations serving multiple lines for each line
+
+### Data Polling and Updates
+1. **Polling Intervals:**
+   - Background: 60 seconds
+   - Foreground: 10 seconds
+   - Stores data for all nearby stations
+   - Updates all open overlays when new data arrives
+
+2. **Walking Time Updates:**
+   - Triggers when distance > 50m from last update location
+   - Also updates when nearby station list changes
+   - No updates otherwise
+
+### Mobile vs Desktop Differences
+1. **Overlay Display:**
+   - Mobile: Maximum 1 overlay at a time
+   - Desktop: Maximum 3 overlays (based on smart selection)
+   - Non-nearby station clicks:
+     - Mobile: Closes nearby station overlay
+     - Desktop: Shows additional overlay
+
+### Error Handling and Visual Feedback
+1. **Location Services:**
+   - Shows message if location services disabled/no permission
+   - Makes user location marker blink if updates stop
+   - Retries location updates every 10s
+
+2. **Data Fetching:**
+   - **Monitor Data:**
+     - Shows cached data for 30s on API failure
+     - Displays minutes in yellow-green when using cached data
+     - Returns to green when fresh data arrives
+   - **Walking Times:**
+     - Retries every 10s on failure
+     - Future: Implement gradual retry interval increase
+
+3. **Real-time Updates:**
+   - Server-side throttling
+   - No specific delay requirements currently
