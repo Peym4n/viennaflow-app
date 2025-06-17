@@ -78,7 +78,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private lastWalkingTimeUpdateLocation: google.maps.LatLng | null = null;
   private previousUserLocation: google.maps.LatLng | null = null;
   private walkingTimeUpdateSubscription: Subscription | null = null;
-  private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 30000;
+  private readonly WALKING_TIME_UPDATE_INTERVAL_MS = 60000; // 60 seconds when not actively viewing
   private readonly MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M = 50; // 50 meters
   private isLoadingClickedStationData: boolean = false; // Track loading state for clicked station's data
 
@@ -295,7 +295,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       this.initializeCustomMapOverlayCtor();
       this.initMap();
       this.subscribeToLocationUpdates();
-      this.setupWalkingTimeUpdateTimer();
     } else {
       console.log('Google Maps API (or Geometry library) not loaded yet, checking again in 100ms');
       setTimeout(() => this.initializeMapWhenReady(), 100);
@@ -303,38 +302,36 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private initMap(): void {
-    console.log('Initializing map...');
-    const defaultCenter = { lat: 48.2082, lng: 16.3738 };
-    try {
-      const mapOptions: google.maps.MapOptions = {
-        center: defaultCenter,
-        zoom: 13,
-        mapTypeControl: false,
-        fullscreenControl: false,
-        streetViewControl: false,
-        zoomControl: true,
-        gestureHandling: 'greedy'
-      };
-      const googleMapsConfig = environment.googleMaps as ExtendedGoogleMapsConfig;
-      if (googleMapsConfig?.mapId) {
-        (mapOptions as any).mapId = googleMapsConfig.mapId;
+    console.log('[MapView] Initializing map...');
+    this.map = new google.maps.Map(this.mapContainer.nativeElement, {
+      center: { lat: 48.2082, lng: 16.3738 }, // Vienna coordinates
+      zoom: 13,
+      mapId: 'vienna_metro_map',
+      mapTypeControl: false,
+      fullscreenControl: false,
+      streetViewControl: false,
+      zoomControl: true,
+      zoomControlOptions: {
+        position: google.maps.ControlPosition.RIGHT_CENTER
       }
-      this.map = new window.google.maps.Map(this.mapContainer.nativeElement, mapOptions);
+    });
 
-      // Add right-click listener to the map
-      this.map.addListener('rightclick', (mapsMouseEvent: google.maps.MapMouseEvent) => {
-        this.handleMapRightClick(mapsMouseEvent);
-      });
+    // Bind the close handler to the window object
+    (window as any).handleCloseOverlay = (stationId: number) => {
+      console.log('[MapView] Close button clicked for station:', stationId);
+      this.handleCloseOverlay(stationId);
+    };
 
-      window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
-        console.log('Map fully loaded and ready');
-        this.loadMetroLines();
-      });
-      this.isLoading = false;
-    } catch (error) {
-      console.error('Error initializing map:', error);
-      this.handleMapLoadingError('Error initializing map. Please try again.');
-    }
+    // Add right-click listener to the map
+    this.map.addListener('rightclick', (mapsMouseEvent: google.maps.MapMouseEvent) => {
+      this.handleMapRightClick(mapsMouseEvent);
+    });
+
+    window.google.maps.event.addListenerOnce(this.map, 'idle', () => {
+      console.log('Map fully loaded and ready');
+      this.loadMetroLines();
+    });
+    this.isLoading = false;
   }
 
   private handleMapLoadingError(message: string): void {
@@ -580,7 +577,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Update the last processed location after the initial fetch
       this.lastProcessedLocationLatLng = newUserLatLng;
-
     } else {
       this.userMarker.setPosition(newUserLatLng);
 
@@ -588,7 +584,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
       // 1. The location has genuinely changed by more than 50m, OR
       // 2. We're transitioning from not fetching to fetching walking times
       if (!this.lastProcessedLocationLatLng ||
-          google.maps.geometry.spherical.computeDistanceBetween(newUserLatLng, this.lastProcessedLocationLatLng) > 50 ||
+          google.maps.geometry.spherical.computeDistanceBetween(newUserLatLng, this.lastProcessedLocationLatLng) > this.MIN_MOVEMENT_DISTANCE_FOR_WALKING_UPDATE_M ||
           (!previousShouldFetchWalkingTimes && shouldFetchWalkingTimes)) {
         console.log('[MapView] Location changed significantly or walking times re-enabled. Re-fetching nearby Steige and walking times.');
 
@@ -619,10 +615,22 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           // Clear existing highlights and overlays immediately after pan
           this.clearHighlightsAndOverlays();
 
+          // Force walking time update for large location changes
+          this.lastWalkingTimeUpdateLocation = newUserLatLng;
+          shouldFetchWalkingTimes = true;
+
           // For mobile view, we'll handle overlay selection after nearby stations are fetched
           if (this.isMobile) {
             this.activeMobileOverlayStationId = null;
           }
+
+          // Re-fetch nearby stations with walking times enabled
+          this.fetchAndDisplayNearbySteige(coordinates, true)
+            .pipe(takeUntil(this.componentDestroyed$))
+            .subscribe({
+              error: (err) => console.error('[MapView] Error fetching nearby Steige after large location change:', err)
+            });
+          return; // Skip the rest of the function since we've handled the large jump
         }
       }
     }
@@ -854,15 +862,21 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           overlay.destroy();
           this.nearbyStationOverlays.delete(stationId);
           console.log(`[MapView] Removed overlay for station ${stationId} (no longer nearby).`);
+          
+          // On mobile, also clear the active mobile overlay station if it's no longer nearby
+          if (this.isMobile && this.activeMobileOverlayStationId === stationId) {
+            this.activeMobileOverlayStationId = null;
+            console.log(`[MapView] Cleared active mobile overlay station ${stationId} as it's no longer nearby.`);
+          }
         }
       });
 
       // Only create overlays if we have walking times
       if (this.stationWalkingTimes.size > 0) {
         this.createOverlaysForStations(divaMapToUpdate, this.lastMonitorResponse, true);
-          } else {
+      } else {
         console.log('[MapView] Waiting for walking times before creating overlays');
-          }
+      }
     }
 
     this.currentPollingDivasKey = newPollingKey;
@@ -990,107 +1004,134 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
 
-      const monitors = monitorResponse.data?.monitors;
-      if (!monitors) {
-        console.warn('[MapView] No monitors data in response:', monitorResponse);
-        return;
-      }
-
-      this.lastMonitorResponse = monitorResponse;
-      console.log("[MapView] Processing monitor data:", {
-        monitorCount: monitors.length,
+      // Process monitor data
+      const responseData = monitorResponse.data as { monitors: any[] };
+      const monitorCount = responseData.monitors.length;
+      console.log('[MapView] Processing monitor data:', {
+        monitorCount,
         activeDivaMap: this.activeDivaMapForPolling,
-        monitors: monitors
+        monitors: responseData.monitors
       });
 
-        // Update existing overlays with new data instead of recreating them
-        this.activeDivaMapForPolling.forEach((_diva, stationId) => {
-          const stationData = this.stationMarkerMap.get(stationId);
-        if (!stationData) {
-          console.log(`[MapView] No station data found for station ${stationId}`);
+      // Update last monitor response
+      this.lastMonitorResponse = monitorResponse;
+
+      // Update clicked station overlay if it exists
+      if (this.clickedStationId !== null && this.clickedStationDiva !== null && this.clickedStationOverlay) {
+        console.log('[MapView] Looking for monitor data for clicked station:', {
+          stationId: this.clickedStationId,
+          diva: this.clickedStationDiva
+        });
+
+        const clickedMonitorData = responseData.monitors.find(
+          (monitor: any) => {
+            // The DIVA value is in locationStop.properties.name
+            const monitorDiva = monitor?.locationStop?.properties?.name;
+            const matches = String(monitorDiva) === String(this.clickedStationDiva);
+            console.log('[MapView] Checking monitor for clicked station:', {
+              monitorDiva,
+              clickedStationDiva: this.clickedStationDiva,
+              matches,
+              monitorLocationStop: monitor?.locationStop
+            });
+            return matches;
+          }
+        );
+
+        if (clickedMonitorData) {
+          console.log('[MapView] Found monitor data for clicked station:', {
+            hasLines: !!clickedMonitorData.lines,
+            linesCount: clickedMonitorData.lines?.length,
+            locationStop: clickedMonitorData.locationStop
+          });
+          const stationData = this.stationMarkerMap.get(this.clickedStationId);
+          if (stationData?.marker) {
+            const position = stationData.marker.getPosition();
+            if (position) {
+              const stationName = stationData.marker.getTitle() || 'Unknown Station';
+              const validLineBezeichnungen = new Set<string>();
+              if (clickedMonitorData.lines) {
+                clickedMonitorData.lines.forEach((line: any) => {
+                  if (line.name) {
+                    validLineBezeichnungen.add(line.name);
+                  }
+                });
+              }
+              const content = this.generateOverlayContentHtml(
+                stationName,
+                this.clickedStationId,
+                this.clickedStationDiva,
+                monitorResponse,
+                validLineBezeichnungen,
+                undefined,
+                true,
+                false
+              );
+              this.updateOverlayContent(this.clickedStationOverlay, content, position);
+            }
+          }
+        } else {
+          console.log('[MapView] No monitor data found for clicked station');
+          const stationData = this.stationMarkerMap.get(this.clickedStationId);
+          if (stationData?.marker) {
+            const position = stationData.marker.getPosition();
+            if (position) {
+              const stationName = stationData.marker.getTitle() || 'Unknown Station';
+              const content = this.generateOverlayContentHtml(
+                stationName,
+                this.clickedStationId,
+                this.clickedStationDiva,
+                null,
+                new Set<string>(),
+                undefined,
+                true,
+                false
+              );
+              this.updateOverlayContent(this.clickedStationOverlay, content, position);
+            }
+          }
+        }
+      }
+
+      // Update nearby station overlays
+      this.activeDivaMapForPolling.forEach((diva, stationId) => {
+        // Skip if this is the clicked station
+        if (stationId === this.clickedStationId) {
           return;
         }
 
-          const stationName = stationData.marker.get('title') as string;
-          const overlay = stationId === this.clickedStationId ?
-            this.clickedStationOverlay :
-            this.nearbyStationOverlays.get(stationId);
+        const nearbyMonitorData = responseData.monitors.find(
+          (monitor: any) => monitor?.locationStop?.diva === diva
+        );
 
+        if (nearbyMonitorData) {
+          console.log(`[MapView] Found monitor data for station ${stationId}:`, nearbyMonitorData);
+          const overlay = this.nearbyStationOverlays.get(stationId);
           if (overlay) {
-            // Use old walking time if available, otherwise get from current map
-          const walkingTime = this.stationWalkingTimes.get(stationId);
-            const validLineBezeichnungen = new Set<string>();
-
-            // Find the monitor data for this station
-            const stationMonitor = monitors.find(
-            (monitor: any) => {
-              const monitorName = monitor.locationStop?.properties?.name;
-              console.log(`[MapView] Comparing monitor ${monitorName} with DIVA ${_diva}`);
-              return monitorName === String(_diva);
-            }
-            );
-
-          if (stationMonitor) {
-            console.log(`[MapView] Found monitor data for station ${stationId}:`, stationMonitor);
-          } else {
-            console.log(`[MapView] No monitor data found for station ${stationId} with DIVA ${_diva}`);
-          }
-
-            // Extract valid line bezeichnungen from the monitor data
-            if (stationMonitor?.lines) {
-              stationMonitor.lines.forEach((line: any) => {
-                if (line.name) {
-                  validLineBezeichnungen.add(line.name);
-                }
-              });
-            }
-
-            // Create a new monitor response with just this station's data
-            const stationMonitorResponse: MonitorApiResponse = {
-              message: monitorResponse.message,
-              data: {
-                monitors: stationMonitor ? [stationMonitor] : []
+            const stationData = this.stationMarkerMap.get(stationId);
+            if (stationData?.marker) {
+              const position = stationData.marker.getPosition();
+              if (position) {
+                const stationName = stationData.marker.getTitle() || 'Unknown Station';
+                const walkingTime = this.stationWalkingTimes.get(stationId);
+                const content = this.generateOverlayContentHtml(
+                  stationName,
+                  stationId,
+                  diva,
+                  monitorResponse,
+                  new Set<string>(),
+                  walkingTime,
+                  false,
+                  false
+                );
+                this.updateOverlayContent(overlay, content, position);
               }
-            };
-
-            // Cache the data for all stations
-            this.nearbyStationCache.set(stationId, stationMonitorResponse);
-            console.log(`[MapView] Cached data for station ${stationId}:`, {
-              hasMonitorData: !!stationMonitor,
-              lineCount: stationMonitor?.lines?.length || 0,
-              cacheSize: this.nearbyStationCache.size,
-              diva: _diva,
-              cacheContents: stationMonitorResponse,
-              monitors: stationMonitorResponse?.data?.monitors || []
-            });
-
-            // Only update loading state for clicked station
-            if (stationId === this.clickedStationId) {
-              this.isLoadingClickedStationData = false;
-              console.log('[MapView] Updated clicked station overlay with new data');
             }
-
-            const content = this.generateOverlayContentHtml(
-              stationName,
-              stationId,
-              _diva,
-              stationMonitor ? stationMonitorResponse : null,
-              validLineBezeichnungen,
-              walkingTime,
-              stationId === this.clickedStationId,
-              stationId === this.clickedStationId ? this.isLoadingClickedStationData : false
-            );
-
-            // Get the marker position for repositioning
-            const position = stationData.marker.getPosition()!;
-            this.updateOverlayContent(overlay, content, position);
-      } else {
-          console.log(`[MapView] No overlay found for station ${stationId}`);
+          } else {
+            console.log(`[MapView] No overlay found for station ${stationId}`);
+          }
         }
       });
-
-      // After processing the response, update the polling interval
-      this.updatePollingInterval();
     });
   }
 
@@ -1383,7 +1424,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     const stationsToShow = this.selectStationsForOverlays(stationDivaMap, maxStations);
 
     // Update overlays for selected stations
-    this.updateOverlaysForStations(stationDivaMap, monitorResponse, stationsToShow);
+    this.updateOverlaysForStations(stationDivaMap, this.lastMonitorResponse || monitorResponse, stationsToShow);
   }
 
   private updateOverlaysForStations(
@@ -1447,7 +1488,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         stationName,
         stationId,
         divaValue,
-        monitorData ? { data: { monitors: [monitorData] }, message: monitorResponse?.message, timestamp: monitorResponse?.timestamp } as MonitorApiResponse : null,
+        monitorResponse, // Pass the full monitorResponse instead of creating a new one
         validLineBezeichnungen,
         walkingTime,
         stationId === this.clickedStationId,
@@ -1486,34 +1527,68 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     validLineBezeichnungen: Set<string>,
     walkingTimeInMinutes: number | undefined,
     isClickedStationNow: boolean,
-    isGlobalPollingLoading: boolean // Accept the new parameter
+    isGlobalPollingLoading: boolean
   ): string {
-    let realTimeHtml = '';
+    console.log('[MapView] Generating overlay content:', {
+      stationName,
+      stationId,
+      divaValue,
+      hasMonitorResponse: !!monitorResponse,
+      validLineBezeichnungen: Array.from(validLineBezeichnungen),
+      walkingTimeInMinutes,
+      isClickedStationNow,
+      isGlobalPollingLoading
+    });
 
-    console.log("isGlobalPollingLoading",isGlobalPollingLoading);
+    let realTimeHtml = '';
 
     // Use the global polling loading state for the loading indicator
     const loadingLineClass = isGlobalPollingLoading ? 'loading-active' : '';
 
     if (isClickedStationNow && divaValue === null) {
+      console.log('[MapView] No DIVA value for clicked station');
       realTimeHtml = `<div class="status-message">Real-time data not available for this station.</div>`;
-    } else if (isClickedStationNow && isGlobalPollingLoading) { // Use global loading here
+    } else if (isClickedStationNow && isGlobalPollingLoading) {
+      console.log('[MapView] Loading state for clicked station');
       realTimeHtml = `<div class="loading-message">Loading departures...</div>`;
     } else if (monitorResponse && (monitorResponse as any).errorOccurred) {
+      console.log('[MapView] Error in monitor response');
       realTimeHtml = `<div class="status-message">Error loading real-time data.</div>`;
     } else if (monitorResponse && monitorResponse.data && monitorResponse.data.monitors) {
+      console.log('[MapView] Processing monitor data for overlay:', {
+        monitorsCount: monitorResponse.data.monitors.length,
+        divaValue
+      });
+
       const stationMonitor = monitorResponse.data.monitors.find(
         (monitor: Monitor) => {
-          const monitorName = monitor.locationStop?.properties?.name;
-          return monitorName === String(divaValue);
+          const monitorName = monitor.locationStop?.properties?.name; // Correctly access name property for DIVA
+          const matches = String(monitorName) === String(divaValue);
+          console.log('[MapView] Checking monitor for match:', {
+            monitorName: monitorName,
+            expectedDivaValue: divaValue,
+            matches: matches,
+            monitorLocationStop: monitor?.locationStop // Add full locationStop for debugging
+          });
+          return matches;
         }
       );
 
       if (stationMonitor) {
-        console.log(`[MapView] Found monitor data for station ${divaValue}:`, stationMonitor);
+        console.log(`[MapView] Found monitor data for station ${divaValue}:`, {
+          hasLines: !!stationMonitor.lines,
+          linesCount: stationMonitor.lines?.length
+        });
+
         const departuresHtmlParts: string[] = [];
         if (stationMonitor.lines && Array.isArray(stationMonitor.lines)) {
           stationMonitor.lines.forEach((line: RealTimeMonitorLine) => {
+            console.log('[MapView] Processing line:', {
+              lineName: line.name,
+              hasDepartures: !!line.departures?.departure,
+              departuresCount: line.departures?.departure?.length
+            });
+
             // Check if the line has departures and they are not empty
             if (line.departures?.departure && Array.isArray(line.departures.departure) && line.departures.departure.length > 0) {
               const firstDeparture = line.departures.departure[0];
@@ -1562,8 +1637,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           });
         }
         if (departuresHtmlParts.length > 0) {
+          console.log('[MapView] Generated departures HTML parts:', {
+            count: departuresHtmlParts.length
+          });
           realTimeHtml = departuresHtmlParts.join('');
         } else {
+          console.log('[MapView] No departures found for station');
           realTimeHtml = `<div class="status-message">No current departures matching filters.</div>`;
         }
       } else {
@@ -1571,6 +1650,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         realTimeHtml = `<div class="status-message">No departures found!</div>`;
       }
     } else {
+      console.log('[MapView] No valid monitor response data');
       realTimeHtml = `<div class="status-message">Real-time data format error or empty response.</div>`;
     }
 
@@ -1580,12 +1660,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
         <span class="walking-time-value">${walkingTimeInMinutes}'</span>
       </span>` : '';
 
+    // Add close button only for non-nearby stations
     const closeButtonHtml = isClickedStationNow ? `
-      <button class="overlay-close-button" data-station-id="${stationId}" style="cursor: pointer; border: none; background: none; padding: 0; pointer-events: auto; display: flex; align-items: center; justify-content: center;">
+      <button class="overlay-close-button" onclick="window.handleCloseOverlay(${stationId})" style="cursor: pointer; border: none; background: none; padding: 0; pointer-events: auto; display: flex; align-items: center; justify-content: center;">
         <span class="material-icons" style="font-size: 16px; color: #555; padding: 4px; border-radius: 50%; background-color: rgba(255,255,255,0.8);">close</span>
-      </button>` : '';
+      </button>
+    ` : '';
+    console.log('[MapView] Generated close button HTML:', {
+      stationId,
+      isClickedStationNow,
+      closeButtonHtml
+    });
 
-    return `
+    const finalHtml = `
       <div class="custom-map-overlay ${isClickedStationNow ? 'clicked-station-overlay' : ''}" style="position: relative; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); padding: 6px 8px 6px;">
         <div class="station-info-header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
           <span class="station-name-bold">${stationName}</span>
@@ -1599,6 +1686,14 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
           ${realTimeHtml}
         </div>
       </div>`;
+
+    console.log('[MapView] Generated final HTML:', {
+      hasRealTimeHtml: !!realTimeHtml,
+      hasLoadingClass: !!loadingLineClass,
+      htmlLength: finalHtml.length
+    });
+
+    return finalHtml;
   }
 
   private createHighlightMarker(
@@ -1646,6 +1741,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleStations(): void {
     this.showStations = !this.showStations;
+    // Only update visibility of regular station markers
     this.stationMarkers.forEach(marker => {
       marker.setVisible(this.showStations);
     });
@@ -1745,183 +1841,137 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
       features.forEach(feature => {
         const stationId = feature.properties.haltestellen_id;
-        if (processedStationIds.has(stationId)) return;
-        processedStationIds.add(stationId);
-
-        const [lng, lat] = feature.geometry.coordinates;
-        const stationName = feature.properties.name;
-        const diva = feature.properties.diva;
-
-        const stationLines = feature.properties.linien_ids
-          .filter((id, index, self) => self.indexOf(id) === index)
-          .map(id => {
-            const lineObj = response.lines[id];
-            return lineObj ? { id, name: lineObj.bezeichnung, color: lineObj.farbe } : null;
-          })
-          .filter(lineInfo => lineInfo !== null) as { id: string; name: string; color: string | undefined }[];
-
-        const strokeColor = stationLines.length >= 2 ? '#000000' : lineColor;
-
-        const marker = new google.maps.Marker({
-          position: { lat, lng },
-          map: this.map,
-          title: stationName,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 7,
-            fillColor: '#FFFFFF',
-            fillOpacity: 1,
-            strokeColor,
-            strokeWeight: 3
-          },
-          visible: this.showStations
-        });
-
-        const infoContent = `
-          <div class="gm-station-info">
-            <h3>${stationName}</h3>
-            <div class="gm-station-lines">
-              ${stationLines.map(lineInfo => `
-                <div class="gm-line-badge" style="background-color: ${lineInfo.color || '#000000'}">
-                  ${lineInfo.name || ''}
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-
-        marker.addListener('click', () => this.handleStationClick(stationId));
-
-        this.stationMarkers.push(marker);
-        this.stationMarkerMap.set(stationId, { marker, diva });
+        if (!processedStationIds.has(stationId)) {
+          const [lng, lat] = feature.geometry.coordinates;
+          const marker = new google.maps.Marker({
+            position: { lat, lng },
+            map: this.map,
+            title: feature.properties.name,
+            visible: this.showStations,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: 'white',
+              fillOpacity: 1,
+              strokeColor: lineColor,
+              strokeWeight: 3
+            }
+          });
+          marker.addListener('click', () => this.handleStationClick(stationId));
+          this.stationMarkers.push(marker);
+          this.stationMarkerMap.set(stationId, { marker, diva: feature.properties.diva });
+          processedStationIds.add(stationId);
+        }
       });
     });
+    console.log(`[MapView] Added ${this.stationMarkers.length} station markers`);
   }
 
   private handleStationClick(stationId: number): void {
-    console.log(`[MapView] Station clicked: ${stationId}`);
+    console.log('[MapView] Station clicked:', stationId);
 
-    // Clear any existing clicked station overlay
-    if (this.clickedStationOverlay) {
-      this.clickedStationOverlay.setMap(null);
-      this.clickedStationOverlay = null;
-    }
+    // Clear existing overlays and highlights
+    this.clearHighlightsAndOverlays('clicked');
 
-    // Clear any existing clicked station highlight marker
-    if (this.clickedStationHighlightMarker) {
-      this.clickedStationHighlightMarker.setMap(null);
-      this.clickedStationHighlightMarker = null;
-    }
-
+    // Find the clicked station's marker and DIVA
     const stationData = this.stationMarkerMap.get(stationId);
     if (!stationData?.marker) {
-      console.warn(`[MapView] No marker found for clicked station ${stationId}`);
+      console.warn('[MapView] No marker found for clicked station:', stationId);
       return;
     }
 
-    const position = stationData.marker.getPosition();
-    if (!position) {
-      console.warn(`[MapView] No position found for clicked station ${stationId}`);
+    const divaValue = stationData.diva;
+    if (!divaValue) {
+      console.warn('[MapView] No DIVA value found for clicked station:', stationId);
       return;
     }
 
-    // Set the clicked station ID and DIVA
+    // Store clicked station info
     this.clickedStationId = stationId;
-    this.clickedStationDiva = stationData.diva ?? null;
+    this.clickedStationDiva = divaValue;
 
     // Create highlight marker for clicked station
     this.clickedStationHighlightMarker = this.createHighlightMarker(stationId, stationData.marker);
 
-    // Find existing monitor data for immediate display
-    let existingMonitorData = null;
-    if (this.lastMonitorResponse?.data?.monitors) {
-      for (const monitor of this.lastMonitorResponse.data.monitors) {
-        if (monitor?.locationStop && 'diva' in monitor.locationStop && monitor.locationStop.diva === stationData.diva) {
-          existingMonitorData = monitor;
-          break;
-        }
-      }
+    // Get station name from marker title
+    const stationName = stationData.marker.getTitle() || 'Unknown Station';
+
+    // On mobile, update the active mobile overlay station
+    if (this.isMobile) {
+      this.activeMobileOverlayStationId = stationId;
     }
 
-    // Get station name from monitor data or marker title
-    const stationName = existingMonitorData?.locationStop && 'name' in existingMonitorData.locationStop && existingMonitorData.locationStop.name ?
-      String(existingMonitorData.locationStop.name) :
-      stationData.marker.getTitle() || 'Unknown Station';
+    // Add clicked station to polling list if not already included
+    const currentDivaMap = new Map(this.activeDivaMapForPolling);
+    if (!currentDivaMap.has(stationId)) {
+      currentDivaMap.set(stationId, divaValue);
+      this.updateMonitoredStationsAndPoll(currentDivaMap, false, true);
+    }
 
-    // Get walking time
-    const walkingTime = this.stationWalkingTimes.get(stationId);
+    // Create overlay for clicked station
+    const position = stationData.marker.getPosition();
+    if (!position) {
+      console.warn('[MapView] No position found for clicked station marker');
+      return;
+    }
 
-    // Generate content for the overlay
-    const content = this.generateOverlayContentHtml(
+    // Create new overlay with initial content
+    const initialContent = this.generateOverlayContentHtml(
       stationName,
       stationId,
-      stationData.diva ?? null,
+      divaValue,
       this.lastMonitorResponse,
-      new Set(existingMonitorData?.lines?.map(line => 'line' in line ? String(line.line) : '') || []),
-      walkingTime,
+      new Set<string>(),
+      undefined,
       true,
-      false
+      true // Set loading state to true initially
     );
 
-    // Create and show the overlay immediately
-    console.log(`[MapView] Creating overlay for clicked station ${stationId}`, {
-      stationName,
-      walkingTime,
-      hasMonitorData: !!existingMonitorData
-    });
+    const overlay = new this.CustomMapOverlayCtor(position, initialContent);
+    this.clickedStationOverlay = overlay;
+    overlay.setMap(this.map);
 
-    this.clickedStationOverlay = new this.CustomMapOverlayCtor(position, content);
-    if (this.clickedStationOverlay) {
-      this.clickedStationOverlay.setMap(this.map);
-    }
+    // If we have monitor data, update the overlay content
+    if (this.lastMonitorResponse?.data?.monitors) {
+      const monitorData = this.lastMonitorResponse.data.monitors.find(
+        (monitor: any) => monitor?.locationStop?.diva === divaValue
+      );
 
-    // Fetch fresh data in the background
-    this.isLoadingClickedStationData = true;
-    if (stationData.diva) {
-      this.apiService.getMonitorData([stationData.diva]).pipe(
-        finalize(() => {
-          this.isLoadingClickedStationData = false;
-        })
-      ).subscribe({
-        next: (response) => {
-          if (!response?.data?.monitors) return;
-
-          // Find the monitor data for this station
-          const monitorData = response.data.monitors.find(
-            (monitor) => monitor?.locationStop && 'diva' in monitor.locationStop && monitor.locationStop.diva === stationData.diva
-          );
-
-          if (!monitorData) return;
-
-          // Update the overlay with fresh data
-          const patchedResponse = {
-            ...response,
-            data: response.data
-              ? { ...response.data, monitors: (response.data.monitors as Monitor[]) }
-              : null,
-            message: response.message ?? ""
-          };
-          const updatedContent = this.generateOverlayContentHtml(
-            stationName,
-            stationId,
-            stationData.diva ?? null,
-            patchedResponse,
-            new Set(monitorData.lines?.map((line) => 'line' in line ? String(line.line) : '') || []),
-            walkingTime,
-            true,
-            false
-          );
-
-          if (this.clickedStationOverlay) {
-            this.updateOverlayContent(this.clickedStationOverlay, updatedContent, position);
-          }
-        },
-        error: (error) => {
-          console.error('[MapView] Error fetching monitor data for clicked station:', error);
+      if (monitorData) {
+        console.log('[MapView] Found monitor data for clicked station:', monitorData);
+        const validLineBezeichnungen = new Set<string>();
+        if (monitorData.lines) {
+          monitorData.lines.forEach((line: any) => {
+            if (line.name) {
+              validLineBezeichnungen.add(line.name);
+            }
+          });
         }
-      });
-    } else {
-      this.isLoadingClickedStationData = false;
+        const content = this.generateOverlayContentHtml(
+          stationName,
+          stationId,
+          divaValue,
+          this.lastMonitorResponse,
+          validLineBezeichnungen,
+          undefined,
+          true,
+          false // Set loading state to false since we have data
+        );
+        this.updateOverlayContent(overlay, content, position);
+      } else {
+        console.log('[MapView] No monitor data found for clicked station');
+        const content = this.generateOverlayContentHtml(
+          stationName,
+          stationId,
+          divaValue,
+          null,
+          new Set<string>(),
+          undefined,
+          true,
+          false // Set loading state to false since we checked
+        );
+        this.updateOverlayContent(overlay, content, position);
+      }
     }
   }
 
@@ -1944,35 +1994,82 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private handleCloseOverlay(stationId: number): void {
-    console.log('[MapView] Closing overlay for station:', stationId);
+    console.log('[MapView] Close overlay requested for station:', {
+      stationId,
+      clickedStationId: this.clickedStationId,
+      hasClickedStationOverlay: !!this.clickedStationOverlay,
+      hasClickedStationHighlight: !!this.clickedStationHighlightMarker,
+      nearbyStationOverlays: Array.from(this.nearbyStationOverlays.keys()),
+      nearbyStationHighlights: Array.from(this.nearbyStationHighlightMarkers.keys()),
+      highlightedStationIds: Array.from(this.highlightedStationIds),
+      activeDivaMap: Array.from(this.activeDivaMapForPolling.entries())
+    });
 
-    if (this.isMobile) {
-      this.activeMobileOverlayStationId = null;
-      // On mobile, after closing an overlay, show the 3 closest stations
-      if (this.stationWalkingTimes.size > 0) {
-        const stationsToShow = this.selectStationsForOverlays(
-          this.activeDivaMapForPolling,
-          3
-        );
-        this.updateOverlaysForStations(
-          this.activeDivaMapForPolling,
-          this.lastMonitorResponse,
-          stationsToShow
-        );
-      }
-    } else {
-      // On desktop, just remove the clicked station's overlay
+    // Check if this is a nearby station overlay
+    const nearbyOverlay = this.nearbyStationOverlays.get(stationId);
+    if (nearbyOverlay) {
+      console.log('[MapView] Found nearby station overlay, attempting to destroy');
+      nearbyOverlay.destroy();
+      this.nearbyStationOverlays.delete(stationId);
+      console.log(`[MapView] Removed nearby station overlay for station ${stationId}`);
+    }
+    
+    // Check if this is the clicked station
+    if (stationId === this.clickedStationId) {
+      console.log('[MapView] Found clicked station overlay, attempting to destroy');
       if (this.clickedStationOverlay) {
+        console.log('[MapView] Destroying clicked station overlay');
         this.clickedStationOverlay.destroy();
         this.clickedStationOverlay = null;
+        console.log(`[MapView] Removed clicked station overlay for station ${stationId}`);
       }
       if (this.clickedStationHighlightMarker) {
+        console.log('[MapView] Removing clicked station highlight marker');
         this.clickedStationHighlightMarker.setMap(null);
         this.clickedStationHighlightMarker = null;
       }
       this.clickedStationId = null;
       this.clickedStationDiva = null;
+
+      // Remove the station from polling if it's not a nearby station
+      if (!this.activeDivaMapForPolling.has(stationId)) {
+        console.log('[MapView] Updating polling after removing clicked station');
+        const currentDivaMap = new Map(this.activeDivaMapForPolling);
+        currentDivaMap.delete(stationId);
+        this.updateMonitoredStationsAndPoll(currentDivaMap, false, true);
+      }
     }
+
+    if (this.isMobile) {
+      console.log('[MapView] Mobile mode: updating mobile overlay state');
+      this.activeMobileOverlayStationId = null;
+      
+      // On mobile, after closing an overlay, show only the closest station
+      if (this.stationWalkingTimes.size > 0) {
+        console.log('[MapView] Mobile mode: finding closest station');
+        const closestStationId = this.findStationWithShortestWalkingTime();
+        if (closestStationId) {
+          console.log('[MapView] Mobile mode: showing closest station overlay:', closestStationId);
+          const stationsToShow = new Set([closestStationId]);
+          this.updateOverlaysForStations(
+            this.activeDivaMapForPolling,
+            this.lastMonitorResponse,
+            stationsToShow
+          );
+        }
+      }
+    }
+
+    console.log('[MapView] Close overlay completed for station:', {
+      stationId,
+      clickedStationId: this.clickedStationId,
+      hasClickedStationOverlay: !!this.clickedStationOverlay,
+      hasClickedStationHighlight: !!this.clickedStationHighlightMarker,
+      nearbyStationOverlays: Array.from(this.nearbyStationOverlays.keys()),
+      nearbyStationHighlights: Array.from(this.nearbyStationHighlightMarkers.keys()),
+      highlightedStationIds: Array.from(this.highlightedStationIds),
+      activeDivaMap: Array.from(this.activeDivaMapForPolling.entries())
+    });
   }
 
   private updateOverlayContent(overlay: any, content: string, position: google.maps.LatLng): void {

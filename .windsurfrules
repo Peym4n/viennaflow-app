@@ -94,7 +94,7 @@
     - The `fetchAndStoreWalkingTimes` method now calls `apiService.getSecureWalkingMatrix()` for walking time data.
     - Implements periodic updates for walking times:
         - Fetched when the set of monitored stations changes.
-        - Fetched every 1 minute if the user has moved more than 50 meters since the last calculation for the current set of stations.
+        - Fetched if the user has moved more than 50 meters since the last calculation for the current set of stations.
     - `lastWalkingTimeUpdateLocation` property tracks the user's location at the time of the last successful walking time API call.
     - Walking duration is displayed in overlays as `X'` (e.g., "10'") next to the station name, including a "directions_walk" icon.
     - Status message in overlays updated to "No departure data found!" when specific monitor data is missing.
@@ -110,24 +110,24 @@
     - Signup form is hidden post-successful registration attempt to guide users to email verification.
 - **Login:** Users can log in with confirmed credentials.
 - **Logout:** Users can log out, clearing their session.
-- **Session Management:** [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1) manages user sessions and authentication state using `@supabase/supabase-js`.
+- **Session Management:** AuthService manages user sessions and authentication state using `@supabase/supabase-js`.
     - `NavigatorLockAcquireTimeoutError` resolved by disabling `autoRefreshToken` and ensuring `@supabase/supabase-js` v2.70.0 is installed.
-    - Circular dependency between [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1) and [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1) resolved using Angular's `Injector`.
+    - Circular dependency between AuthService and ProfileService resolved using Angular's `Injector`.
 
 ### User Profile Management
 - **`profiles` Table:** A Supabase table `public.profiles` stores user-specific data:
-    - [id](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:7:0-16:1) (UUID, foreign key to `auth.users.id`, primary key)
-    - [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (TEXT, unique, chosen by user)
-    - [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3) (TEXT, sourced from `auth.users.email`)
-- **`handle_new_user` Trigger:** A PostgreSQL trigger function automatically creates a new row in `public.profiles` when a new user signs up in `auth.users`. This trigger populates [id](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:7:0-16:1), [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3), and an initial [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (if provided in `raw_user_meta_data`, otherwise null).
-- **[ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1):** An Angular service ([src/app/core/services/profile.service.ts](cci:7://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:0:0-0:0)) handles:
+    - id (UUID, foreign key to `auth.users.id`, primary key)
+    - username (TEXT, unique, chosen by user)
+    - email (TEXT, sourced from `auth.users.email`)
+- **`handle_new_user` Trigger:** A PostgreSQL trigger function automatically creates a new row in `public.profiles` when a new user signs up in `auth.users`. This trigger populates id, email, and an initial username (if provided in `raw_user_meta_data`, otherwise null).
+- **ProfileService:** An Angular service handles:
     - Fetching the current user's profile from the `profiles` table.
     - Updating the user's username.
 - **UI Integration:**
     - **Profile Management Page:** Allows users to view their email and set/update their username.
-    - **Navbar Display:** After login, the navbar displays the user's [username](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/features/profile/profile-management/profile-management.component.ts:43:2-45:3) (from [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1)). If no username is set, it falls back to the user's [email](cci:1://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/auth/signup/signup.component.ts:45:2-47:3).
+    - **Navbar Display:** After login, the navbar displays the user's username (from ProfileService). If no username is set, it falls back to the user's email.
 
 ### Key Dependencies & Configuration
 - `@supabase/supabase-js`: v2.70.0
-- Angular Services: [AuthService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/auth.service.ts:20:0-158:1), [ProfileService](cci:2://file:///c:/Users/ada/Documents/FHTW/SS25/ITP/ViennaFlow/viennaflow-app/src/app/core/services/profile.service.ts:7:0-124:1) for managing auth state and profile data.
+- Angular Services: AuthService, ProfileService for managing auth state and profile data.
 - Supabase RLS: Row Level Security policies are in place for `profiles` and `user_favorite_stations` tables to ensure users can only access/modify their own data.
