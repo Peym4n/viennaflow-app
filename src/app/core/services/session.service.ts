@@ -1,71 +1,38 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject, of, tap, map, catchError, throwError, shareReplay } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, throwError } from 'rxjs';
+import { SigningSessionResponse } from '@shared-types/api-models';
 
-interface SessionInitResponse {
-  sessionSigningKey: string;
-}
-
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class SessionService {
-  private http = inject(HttpClient);
-  private sessionSigningKeyInternal: string | null = null;
-  private sessionInitialization$: Observable<string | null> | null = null;
+  private readonly http = inject(HttpClient);
+  private signingKey: string | null = null;
+  private expiresAt = 0;
+  private initialization: Observable<string> | null = null;
 
-  constructor() {}
-
-  /**
-   * Ensures a session is initialized and returns the session signing key.
-   * If a key is already available, it returns it. Otherwise, it fetches a new one.
-   * Uses shareReplay to prevent multiple concurrent calls to /api/session/init.
-   */
-  public ensureSessionSigningKey(): Observable<string | null> {
-    if (this.sessionSigningKeyInternal) {
-      return of(this.sessionSigningKeyInternal);
-    }
-
-    if (!this.sessionInitialization$) {
-      this.sessionInitialization$ = this.http.get<SessionInitResponse>('/api/session/init').pipe(
-        tap(response => {
-          if (response && response.sessionSigningKey) {
-            this.sessionSigningKeyInternal = response.sessionSigningKey;
-            console.log('Session initialized and signing key received.');
-          } else {
-            console.error('Failed to receive session signing key from server.');
-            this.sessionSigningKeyInternal = null; 
+  ensureSessionSigningKey(): Observable<string> {
+    if (this.signingKey && Date.now() < this.expiresAt - 60000) return of(this.signingKey);
+    if (!this.initialization) {
+      this.initialization = this.http.get<SigningSessionResponse>('/api/session/init').pipe(
+        map(response => {
+          if (typeof response?.sessionSigningKey !== 'string' || !/^[a-f0-9]{128}$/.test(response.sessionSigningKey)) {
+            throw new Error('Invalid walking-session response');
           }
+          this.signingKey = response.sessionSigningKey;
+          this.expiresAt = typeof response.expiresAt === 'number' && Number.isFinite(response.expiresAt) ? response.expiresAt : Date.now() + 23 * 3600000;
+          this.initialization = null;
+          return this.signingKey;
         }),
-        map(response => response?.sessionSigningKey || null),
-        catchError(error => {
-          console.error('Error initializing session:', error);
-          this.sessionSigningKeyInternal = null;
-          this.sessionInitialization$ = null; // Allow retry on next call
-          return throwError(() => new Error('Session initialization failed.'));
+        catchError(() => {
+          this.clearSession();
+          return throwError(() => new Error('Walking session could not be initialized'));
         }),
-        shareReplay(1) // Cache the result and share among subscribers, replay for new ones
+        // Initialization belongs to the app session and is shared until completion.
+        shareReplay({ bufferSize: 1, refCount: false }),
       );
     }
-    return this.sessionInitialization$;
+    return this.initialization;
   }
 
-  /**
-   * Gets the currently stored session signing key.
-   * This does not initiate a new session if one isn't already established.
-   * Prefer ensureSessionSigningKey() for most use cases.
-   */
-  public getCurrentSessionSigningKey(): string | null {
-    return this.sessionSigningKeyInternal;
-  }
-
-  /**
-   * Clears the stored session signing key.
-   * This might be useful on logout or when a session is known to be invalid.
-   */
-  public clearSession(): void {
-    this.sessionSigningKeyInternal = null;
-    this.sessionInitialization$ = null; // Allow re-initialization
-    console.log('Session signing key cleared.');
-  }
+  clearSession(): void { this.signingKey = null; this.expiresAt = 0; this.initialization = null; }
 }
