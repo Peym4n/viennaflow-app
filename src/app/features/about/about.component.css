@@ -1,0 +1,5 @@
+:host { display: flex; flex-direction: column; height: 100%; min-height: 320px; }
+.about-status { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; font-size: 14px; }
+a { color: #185abc; }
+a:focus-visible { outline: 3px solid #185abc; outline-offset: 3px; }
+iframe { width: 100%; flex: 1; min-height: 240px; border: 0; }

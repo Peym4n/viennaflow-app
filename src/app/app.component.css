@@ -44,6 +44,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
 }
@@ -63,7 +64,8 @@
   width: 100%;
   box-sizing: border-box;
   position: relative;
-  overflow: hidden; /* Prevent scrolling */
+  min-height: 0;
+  overflow: auto;
   padding-top: 64px; /* Account for fixed navbar height */
 }
 

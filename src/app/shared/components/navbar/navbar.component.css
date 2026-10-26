@@ -97,7 +97,7 @@
 }
 
 /* Media queries for responsive design */
-@media (max-width: 600px) {
+@media (max-width: 599px) {
   .brand-name {
     font-size: 1.2rem;
   }

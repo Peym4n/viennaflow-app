@@ -1,4 +1,4 @@
-<mat-toolbar color="primary" class="navbar mat-elevation-z2">
+<mat-toolbar color="primary" class="navbar mat-elevation-z2" role="navigation" aria-label="Main navigation">
   <div class="container">
     <!-- Logo and brand name -->
     <div class="brand">
@@ -15,67 +15,69 @@
     <div class="spacer"></div>
 
     <!-- Desktop menu -->
-    <div class="nav-links" *ngIf="!(isHandset$ | async)">
-      <button
-        mat-button
-        *ngFor="let item of navItems"
-        [routerLink]="item.route"
-        routerLinkActive="active-link"
-        [routerLinkActiveOptions]="{exact: item.route === '/'}"
-      >
-        <mat-icon>{{ item.icon }}</mat-icon>
-        <span>{{ item.label }}</span>
-      </button>
-
-      <!-- Auth links for Desktop -->
-      <!-- Temporarily commented out
-      <ng-container *ngIf="!(isLoggedIn$ | async)">
-        <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">
-          <mat-icon>person_add</mat-icon>
-          <span>Sign Up</span>
+    @if (!(isHandset$ | async)) {
+      <div class="nav-links">
+        @for (item of navItems; track item.route) {
+          <button
+            mat-button
+            [routerLink]="item.route"
+            routerLinkActive="active-link"
+            [routerLinkActiveOptions]="{exact: item.route === '/'}"
+            >
+            <mat-icon>{{ item.icon }}</mat-icon>
+            <span>{{ item.label }}</span>
+          </button>
+        }
+        <!-- Auth links for Desktop -->
+        <!-- Temporarily commented out
+        <ng-container *ngIf="!(isLoggedIn$ | async)">
+          <button mat-button routerLink="/auth/signup" routerLinkActive="active-link">
+            <mat-icon>person_add</mat-icon>
+            <span>Sign Up</span>
+          </button>
+          <button mat-button routerLink="/auth/login" routerLinkActive="active-link">
+            <mat-icon>login</mat-icon>
+            <span>Login</span>
+          </button>
+        </ng-container>
+        -->
+        @if (isLoggedIn$ | async) {
+          <button mat-button routerLink="/profile" routerLinkActive="active-link">
+            <mat-icon>account_circle</mat-icon> {{ userDisplay$ | async }}
+          </button>
+          <button mat-button (click)="logout()">
+            <mat-icon>logout</mat-icon> Logout
+          </button>
+        }
+        <!-- Desktop More Menu Button -->
+        <button mat-icon-button [matMenuTriggerFor]="desktopMoreMenu" aria-label="More options">
+          <mat-icon>more_vert</mat-icon>
         </button>
-        <button mat-button routerLink="/auth/login" routerLinkActive="active-link">
-          <mat-icon>login</mat-icon>
-          <span>Login</span>
-        </button>
-      </ng-container>
-      -->
-
-      <ng-container *ngIf="isLoggedIn$ | async">
-        <button mat-button routerLink="/profile" routerLinkActive="active-link">
-          <mat-icon>account_circle</mat-icon> {{ userDisplay$ | async }}
-        </button>
-        <button mat-button (click)="logout()">
-          <mat-icon>logout</mat-icon> Logout
-        </button>
-      </ng-container>
-
-      <!-- Desktop More Menu Button -->
-      <button mat-icon-button [matMenuTriggerFor]="desktopMoreMenu" aria-label="More options">
-        <mat-icon>more_vert</mat-icon>
-      </button>
-    </div>
+      </div>
+    }
 
     <!-- Mobile menu with hamburger button -->
-    <button
-      *ngIf="isHandset$ | async"
-      mat-icon-button
-      [matMenuTriggerFor]="mobileMenu"
-      aria-label="Toggle navigation menu"
-    >
-      <mat-icon>menu</mat-icon>
-    </button>
+    @if (isHandset$ | async) {
+      <button
+        mat-icon-button
+        [matMenuTriggerFor]="mobileMenu"
+        aria-label="Toggle navigation menu"
+        >
+        <mat-icon>menu</mat-icon>
+      </button>
+    }
 
     <!-- Mobile Menu -->
     <mat-menu #mobileMenu="matMenu" xPosition="before">
-      <button
-        mat-menu-item
-        *ngFor="let item of navItems"
-        (click)="navigateTo(item.route)"
-      >
-        <mat-icon>{{ item.icon }}</mat-icon>
-        <span>{{ item.label }}</span>
-      </button>
+      @for (item of navItems; track item.route) {
+        <button
+          mat-menu-item
+          (click)="navigateTo(item.route)"
+          >
+          <mat-icon>{{ item.icon }}</mat-icon>
+          <span>{{ item.label }}</span>
+        </button>
+      }
       <mat-divider></mat-divider>
       <a mat-menu-item href="https://viennaflow.at/privacypolicy" target="_blank" rel="noopener noreferrer">
         <mat-icon>shield</mat-icon> Privacy Policy
@@ -95,7 +97,7 @@
         </button>
       </ng-container>
       -->
-      <ng-container *ngIf="isLoggedIn$ | async">
+      @if (isLoggedIn$ | async) {
         <mat-divider></mat-divider>
         <button mat-menu-item (click)="navigateTo('/profile')">
           <mat-icon>account_circle</mat-icon> {{ userDisplay$ | async }}
@@ -103,7 +105,7 @@
         <button mat-menu-item (click)="logout()">
           <mat-icon>logout</mat-icon> Logout
         </button>
-      </ng-container>
+      }
     </mat-menu>
 
     <!-- Desktop More Menu -->

@@ -1,1 +1,6 @@
-<iframe [src]="sanitizedAboutUrl" width="100%" height="100%" style="border:none;"></iframe>
+<div class="about-status">
+  @if (status() === 'loading') { <span role="status">Loading About ViennaFlow…</span> }
+  @if (status() === 'unavailable') { <span role="status">The embedded page may be unavailable.</span> }
+  <a [href]="aboutUrl" target="_blank" rel="noopener noreferrer">Open About ViennaFlow in a new tab</a>
+</div>
+<iframe [src]="sanitizedAboutUrl" title="About ViennaFlow" (load)="loaded()" (error)="failed()"></iframe>

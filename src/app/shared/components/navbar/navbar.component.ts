@@ -1,4 +1,4 @@
-import { Component, inject, ViewEncapsulation } from '@angular/core';
+import { Component, inject, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 import { Router, RouterModule } from '@angular/router';
-import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { Observable, of } from 'rxjs';
 import { map, shareReplay, switchMap, catchError } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service'; // Adjust path if needed
@@ -28,6 +28,7 @@ import { User } from '@supabase/supabase-js';
   ],
   templateUrl: './navbar.component.html',
   styleUrl: './navbar.component.css',
+  changeDetection: ChangeDetectionStrategy.Eager,
   encapsulation: ViewEncapsulation.None // This will use the global configuration
 })
 export class NavbarComponent {
@@ -67,10 +68,10 @@ export class NavbarComponent {
   private breakpointObserver = inject(BreakpointObserver);
   private router = inject(Router);
   
-  isHandset$: Observable<boolean> = this.breakpointObserver.observe(Breakpoints.Handset)
+  isHandset$: Observable<boolean> = this.breakpointObserver.observe('(max-width: 599px)')
     .pipe(
       map(result => result.matches),
-      shareReplay()
+      shareReplay({ bufferSize: 1, refCount: true })
     );
     
   navItems = [

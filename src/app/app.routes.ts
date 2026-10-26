@@ -1,20 +1,13 @@
 import { Routes } from '@angular/router';
 import { MapViewComponent } from './features/map/components/map-view/map-view.component';
-import { LoginComponent } from './auth/login/login.component';
-import { SignupComponent } from './auth/signup/signup.component';
-import { ProfileManagementComponent } from './features/profile/profile-management/profile-management.component';
-import { AboutComponent } from './features/about/about.component';
-import { ForgotPasswordComponent } from './auth/forgot-password/forgot-password.component';
-import { ResetPasswordComponent } from './auth/reset-password/reset-password.component';
 
 export const routes: Routes = [
   { path: '', component: MapViewComponent },
-  { path: 'auth/login', component: LoginComponent },
-  { path: 'auth/signup', component: SignupComponent },
-  { path: 'auth/forgot-password', component: ForgotPasswordComponent },
-  { path: 'auth/reset-password', component: ResetPasswordComponent },
-  { path: 'profile', component: ProfileManagementComponent }, // Add AuthGuard later
-  { path: 'about', component: AboutComponent }, // Added about route
-  // Consider adding a route guard later for authenticated areas
-  { path: '**', redirectTo: '' } // Wildcard route should generally be last
+  { path: 'auth/login', loadComponent: () => import('./auth/login/login.component').then(module => module.LoginComponent) },
+  { path: 'auth/signup', loadComponent: () => import('./auth/signup/signup.component').then(module => module.SignupComponent) },
+  { path: 'auth/forgot-password', loadComponent: () => import('./auth/forgot-password/forgot-password.component').then(module => module.ForgotPasswordComponent) },
+  { path: 'auth/reset-password', loadComponent: () => import('./auth/reset-password/reset-password.component').then(module => module.ResetPasswordComponent) },
+  { path: 'profile', loadComponent: () => import('./features/profile/profile-management/profile-management.component').then(module => module.ProfileManagementComponent) },
+  { path: 'about', loadComponent: () => import('./features/about/about.component').then(module => module.AboutComponent) },
+  { path: '**', redirectTo: '' }
 ];
