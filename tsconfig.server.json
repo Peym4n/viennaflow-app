@@ -1,0 +1,9 @@
+{
+  "extends": "./api/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "resolveJsonModule": true
+  },
+  "include": ["api/**/*.ts", "server/**/*.ts", "scripts/**/*.ts", "types/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

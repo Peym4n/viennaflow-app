@@ -1,21 +1,25 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
+import { defineConfig } from 'vitest/config';
+import { resolve } from 'node:path';
+import { angularJit } from './testing/angular-jit.ts';
 
 export default defineConfig({
+  plugins: [angularJit()],
   resolve: {
-    alias: {
-      '@app': resolve(__dirname, './src/app'),
-      '@environments': resolve(__dirname, './src/environments'),
-    },
+    alias: [
+      { find: /^(?:.*\/)?environments\/environment$/, replacement: resolve(import.meta.dirname, 'testing/environment.ts') },
+      { find: '@environments/environment', replacement: resolve(import.meta.dirname, 'testing/environment.ts') },
+      { find: '@app', replacement: resolve(import.meta.dirname, 'src/app') },
+      { find: '@shared-types', replacement: resolve(import.meta.dirname, 'types') },
+    ],
   },
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['**/*.spec.ts'],
+    include: ['src/**/*.spec.ts'],
     setupFiles: ['src/test-setup.ts'],
-    // Disable test isolation to avoid Zone.js issues
-    isolate: false,
+    restoreMocks: true,
+    unstubGlobals: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

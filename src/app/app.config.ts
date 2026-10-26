@@ -15,11 +15,6 @@ export const appConfig: ApplicationConfig = {
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000'
-    }),
-    // Disable view encapsulation in development mode
-    {
-      provide: 'VIEW_ENCAPSULATION',
-      useValue: isDevMode() ? 'None' : 'Emulated'
-    }
+    })
   ]
 };

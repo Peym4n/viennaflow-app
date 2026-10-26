@@ -17,12 +17,10 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "ES2022",
-    "lib": ["ES2022", "dom"],
     "types": ["google.maps"],
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "baseUrl": ".",
     "paths": {
-      "@shared-types/*": ["types/*"]
+      "@shared-types/*": ["./types/*"]
     },
     "noEmit": true
   },

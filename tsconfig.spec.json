@@ -3,13 +3,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "resolveJsonModule": true,
     "outDir": "./out-tsc/spec",
     "types": [
-      "jasmine"
+      "node", "google.maps"
     ]
   },
   "include": [
     "src/**/*.spec.ts",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "testing/**/*.ts"
   ]
 }
