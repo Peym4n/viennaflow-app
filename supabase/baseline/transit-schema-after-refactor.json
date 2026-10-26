@@ -1,0 +1,969 @@
+{
+  "capturedAt": "2026-10-26T14:21:27.484Z",
+  "postgresVersion": "15.8",
+  "extensions": [
+    {
+      "name": "postgis",
+      "version": "3.3.7",
+      "schema": "public"
+    }
+  ],
+  "tables": [
+    {
+      "table_name": "haltestellen",
+      "column_name": "haltestellen_id",
+      "data_type": "bigint",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "typ",
+      "data_type": "character varying(50)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "diva",
+      "data_type": "integer",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "name",
+      "data_type": "character varying(255)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "gemeinde",
+      "data_type": "character varying(255)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "gemeinde_id",
+      "data_type": "integer",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "location",
+      "data_type": "geography(Point,4326)",
+      "not_null": false,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "haltestellen",
+      "column_name": "stand",
+      "data_type": "timestamp without time zone",
+      "not_null": false,
+      "default_value": "now()",
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "linien_id",
+      "data_type": "bigint",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "bezeichnung",
+      "data_type": "character varying(50)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "reihenfolge",
+      "data_type": "integer",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "echtzeit",
+      "data_type": "boolean",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "verkehrsmittel",
+      "data_type": "character varying(50)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "linien",
+      "column_name": "stand",
+      "data_type": "timestamp without time zone",
+      "not_null": false,
+      "default_value": "now()",
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "steig_id",
+      "data_type": "bigint",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "fk_linien_id",
+      "data_type": "bigint",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "fk_haltestellen_id",
+      "data_type": "bigint",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "richtung",
+      "data_type": "character(1)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "reihenfolge",
+      "data_type": "integer",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "rbl_nummer",
+      "data_type": "integer",
+      "not_null": false,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "bereich",
+      "data_type": "integer",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "steig",
+      "data_type": "character varying(10)",
+      "not_null": true,
+      "default_value": null,
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "stand",
+      "data_type": "timestamp without time zone",
+      "not_null": false,
+      "default_value": "now()",
+      "identity": ""
+    },
+    {
+      "table_name": "steige",
+      "column_name": "location",
+      "data_type": "geography(Point,4326)",
+      "not_null": false,
+      "default_value": null,
+      "identity": ""
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "haltestellen",
+      "name": "haltestellen_pkey",
+      "definition": "PRIMARY KEY (haltestellen_id)"
+    },
+    {
+      "table_name": "linien",
+      "name": "linien_pkey",
+      "definition": "PRIMARY KEY (linien_id)"
+    },
+    {
+      "table_name": "steige",
+      "name": "steigen_fk_haltestellen_id_fkey",
+      "definition": "FOREIGN KEY (fk_haltestellen_id) REFERENCES haltestellen(haltestellen_id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "steige",
+      "name": "steigen_fk_linien_id_fkey",
+      "definition": "FOREIGN KEY (fk_linien_id) REFERENCES linien(linien_id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "steige",
+      "name": "steigen_pkey",
+      "definition": "PRIMARY KEY (steig_id, fk_linien_id, fk_haltestellen_id)"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "haltestellen",
+      "indexname": "haltestellen_pkey",
+      "indexdef": "CREATE UNIQUE INDEX haltestellen_pkey ON public.haltestellen USING btree (haltestellen_id)"
+    },
+    {
+      "tablename": "linien",
+      "indexname": "linien_pkey",
+      "indexdef": "CREATE UNIQUE INDEX linien_pkey ON public.linien USING btree (linien_id)"
+    },
+    {
+      "tablename": "linien",
+      "indexname": "linien_verkehrsmittel_idx",
+      "indexdef": "CREATE INDEX linien_verkehrsmittel_idx ON public.linien USING btree (verkehrsmittel)"
+    },
+    {
+      "tablename": "steige",
+      "indexname": "steige_fk_haltestellen_id_idx",
+      "indexdef": "CREATE INDEX steige_fk_haltestellen_id_idx ON public.steige USING btree (fk_haltestellen_id)"
+    },
+    {
+      "tablename": "steige",
+      "indexname": "steige_fk_linien_id_idx",
+      "indexdef": "CREATE INDEX steige_fk_linien_id_idx ON public.steige USING btree (fk_linien_id)"
+    },
+    {
+      "tablename": "steige",
+      "indexname": "steige_location_gist_idx",
+      "indexdef": "CREATE INDEX steige_location_gist_idx ON public.steige USING gist (location)"
+    },
+    {
+      "tablename": "steige",
+      "indexname": "steige_reihenfolge_idx",
+      "indexdef": "CREATE INDEX steige_reihenfolge_idx ON public.steige USING btree (reihenfolge)"
+    },
+    {
+      "tablename": "steige",
+      "indexname": "steigen_pkey",
+      "indexdef": "CREATE UNIQUE INDEX steigen_pkey ON public.steige USING btree (steig_id, fk_linien_id, fk_haltestellen_id)"
+    }
+  ],
+  "functions": [
+    {
+      "name": "get_nearby_steige",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_nearby_steige(lat double precision, lon double precision, radius integer DEFAULT 1000)\n RETURNS TABLE(steig_id bigint, fk_linien_id bigint, linien_bezeichnung text, fk_haltestellen_id bigint, haltestellen_name text, haltestellen_diva integer, richtung text, rbl_nummer bigint, location text)\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_temp'\nAS $function$BEGIN\r\n    RETURN QUERY\r\n    SELECT\r\n        s.steig_id,\r\n        s.fk_linien_id,\r\n        l.bezeichnung::TEXT AS linien_bezeichnung,\r\n        s.fk_haltestellen_id,\r\n        h.name::TEXT AS haltestellen_name,\r\n        h.diva AS haltestellen_diva,\r\n        s.richtung::TEXT AS richtung,\r\n        s.rbl_nummer::BIGINT AS rbl_nummer,\r\n        ST_AsGeoJSON(s.location)::TEXT AS location\r\n    FROM\r\n        steige s\r\n        JOIN linien l ON s.fk_linien_id = l.linien_id\r\n        JOIN haltestellen h ON s.fk_haltestellen_id = h.haltestellen_id\r\n    WHERE\r\n        ST_DWithin(\r\n            s.location::geography,\r\n            ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,\r\n            radius\r\n        );\r\nEND;$function$\n"
+    }
+  ],
+  "policies": [
+    {
+      "tablename": "haltestellen",
+      "policyname": "transit_public_read",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "tablename": "linien",
+      "policyname": "transit_public_read",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "tablename": "steige",
+      "policyname": "transit_public_read",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    }
+  ],
+  "rls": [
+    {
+      "table_name": "haltestellen",
+      "enabled": true,
+      "forced": false
+    },
+    {
+      "table_name": "linien",
+      "enabled": true,
+      "forced": false
+    },
+    {
+      "table_name": "steige",
+      "enabled": true,
+      "forced": false
+    }
+  ],
+  "grants": [
+    {
+      "table_name": "haltestellen",
+      "grantee": "anon",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "DELETE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "INSERT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "SELECT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "DELETE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "INSERT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "haltestellen",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "anon",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "DELETE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "INSERT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "SELECT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "DELETE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "INSERT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "linien",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "anon",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "authenticated",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "DELETE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "INSERT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "SELECT",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "postgres",
+      "privilege_type": "UPDATE",
+      "is_grantable": "YES"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "DELETE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "INSERT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "REFERENCES",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "SELECT",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "TRIGGER",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "TRUNCATE",
+      "is_grantable": "NO"
+    },
+    {
+      "table_name": "steige",
+      "grantee": "service_role",
+      "privilege_type": "UPDATE",
+      "is_grantable": "NO"
+    }
+  ],
+  "functionGrants": [
+    {
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ],
+  "counts": [
+    {
+      "table_name": "linien",
+      "rows": "197"
+    },
+    {
+      "table_name": "haltestellen",
+      "rows": "1959"
+    },
+    {
+      "table_name": "steige",
+      "rows": "7362"
+    }
+  ],
+  "migrationHistoryExists": true,
+  "migrationVersions": [
+    "20250612022830",
+    "20261026000100",
+    "20261026000200",
+    "20261026000300"
+  ],
+  "spatialPlans": [
+    {
+      "radius": 800,
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Nested Loop",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Join Type": "Inner",
+            "Startup Cost": 0.55,
+            "Total Cost": 1666.58,
+            "Plan Rows": 1,
+            "Plan Width": 164,
+            "Actual Rows": 137,
+            "Actual Loops": 1,
+            "Inner Unique": true,
+            "Shared Hit Blocks": 659,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Inner",
+                "Startup Cost": 0.27,
+                "Total Cost": 1662.83,
+                "Plan Rows": 1,
+                "Plan Width": 65,
+                "Actual Rows": 137,
+                "Actual Loops": 1,
+                "Inner Unique": true,
+                "Join Filter": "(s.fk_linien_id = l.linien_id)",
+                "Rows Removed by Join Filter": 7553,
+                "Shared Hit Blocks": 248,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "NoMovement",
+                    "Index Name": "steige_location_gist_idx",
+                    "Relation Name": "steige",
+                    "Alias": "s",
+                    "Startup Cost": 0.27,
+                    "Total Cost": 1656.39,
+                    "Plan Rows": 1,
+                    "Plan Width": 62,
+                    "Actual Rows": 137,
+                    "Actual Loops": 1,
+                    "Index Cond": "((location)::geography && _st_expand('0101000020E6100000AB3E575BB15F30407B832F4CA61A4840'::geography, '800'::double precision))",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "st_dwithin((location)::geography, '0101000020E6100000AB3E575BB15F30407B832F4CA61A4840'::geography, '800'::double precision, true)",
+                    "Rows Removed by Filter": 109,
+                    "Shared Hit Blocks": 101,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  },
+                  {
+                    "Node Type": "Seq Scan",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Relation Name": "linien",
+                    "Alias": "l",
+                    "Startup Cost": 0,
+                    "Total Cost": 3.97,
+                    "Plan Rows": 197,
+                    "Plan Width": 11,
+                    "Actual Rows": 56,
+                    "Actual Loops": 137,
+                    "Shared Hit Blocks": 147,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Index Scan",
+                "Parent Relationship": "Inner",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "haltestellen_pkey",
+                "Relation Name": "haltestellen",
+                "Alias": "h",
+                "Startup Cost": 0.28,
+                "Total Cost": 2.5,
+                "Plan Rows": 1,
+                "Plan Width": 29,
+                "Actual Rows": 1,
+                "Actual Loops": 137,
+                "Index Cond": "(haltestellen_id = s.fk_haltestellen_id)",
+                "Rows Removed by Index Recheck": 0,
+                "Shared Hit Blocks": 411,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 54,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 2,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.505,
+          "Triggers": [],
+          "Execution Time": 2.21
+        }
+      ]
+    },
+    {
+      "radius": 5000,
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Nested Loop",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Join Type": "Inner",
+            "Startup Cost": 0.27,
+            "Total Cost": 92842.32,
+            "Plan Rows": 1,
+            "Plan Width": 164,
+            "Actual Rows": 2794,
+            "Actual Loops": 1,
+            "Inner Unique": true,
+            "Join Filter": "(s.fk_haltestellen_id = h.haltestellen_id)",
+            "Rows Removed by Join Filter": 2205993,
+            "Shared Hit Blocks": 35488,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Inner",
+                "Startup Cost": 0.27,
+                "Total Cost": 92769.99,
+                "Plan Rows": 1,
+                "Plan Width": 65,
+                "Actual Rows": 2794,
+                "Actual Loops": 1,
+                "Inner Unique": true,
+                "Join Filter": "(s.fk_linien_id = l.linien_id)",
+                "Rows Removed by Join Filter": 223733,
+                "Shared Hit Blocks": 4333,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "NoMovement",
+                    "Index Name": "steige_location_gist_idx",
+                    "Relation Name": "steige",
+                    "Alias": "s",
+                    "Startup Cost": 0.27,
+                    "Total Cost": 92763.56,
+                    "Plan Rows": 1,
+                    "Plan Width": 62,
+                    "Actual Rows": 2794,
+                    "Actual Loops": 1,
+                    "Index Cond": "((location)::geography && _st_expand('0101000020E6100000AB3E575BB15F30407B832F4CA61A4840'::geography, '5000'::double precision))",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "st_dwithin((location)::geography, '0101000020E6100000AB3E575BB15F30407B832F4CA61A4840'::geography, '5000'::double precision, true)",
+                    "Rows Removed by Filter": 1103,
+                    "Shared Hit Blocks": 960,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  },
+                  {
+                    "Node Type": "Seq Scan",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Relation Name": "linien",
+                    "Alias": "l",
+                    "Startup Cost": 0,
+                    "Total Cost": 3.97,
+                    "Plan Rows": 197,
+                    "Plan Width": 11,
+                    "Actual Rows": 81,
+                    "Actual Loops": 2794,
+                    "Shared Hit Blocks": 3373,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              },
+              {
+                "Node Type": "Seq Scan",
+                "Parent Relationship": "Inner",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Relation Name": "haltestellen",
+                "Alias": "h",
+                "Startup Cost": 0,
+                "Total Cost": 46.59,
+                "Plan Rows": 1959,
+                "Plan Width": 29,
+                "Actual Rows": 791,
+                "Actual Loops": 2794,
+                "Shared Hit Blocks": 31155,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 22,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.39,
+          "Triggers": [],
+          "Execution Time": 285.558
+        }
+      ]
+    }
+  ]
+}

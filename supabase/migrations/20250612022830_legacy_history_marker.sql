@@ -1,0 +1,4 @@
+-- Preserve the historical version already recorded by the hosted project.
+-- Its stored migration has no SQL statements; there is no original DDL to replay.
+-- The verified transit snapshot is versioned in 20261026000100_transit_baseline.sql.
+-- This marker does not define or change the deferred account schema.
