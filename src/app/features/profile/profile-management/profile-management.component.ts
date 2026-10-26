@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Subscription, Observable } from 'rxjs'; // Removed map if not used elsewhere, check needed
@@ -11,6 +11,7 @@ import { UserProfile } from '../../../core/models/user-profile.model';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './profile-management.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./profile-management.component.scss']
 })
 export class ProfileManagementComponent implements OnInit, OnDestroy {

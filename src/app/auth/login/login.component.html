@@ -4,34 +4,52 @@
     <div class="form-field">
       <label for="email">Email</label>
       <input id="email" type="email" formControlName="email" placeholder="your@email.com" autocomplete="email">
-      <div *ngIf="email?.invalid && (email?.dirty || email?.touched)" class="error-message">
-        <small *ngIf="email?.errors?.['required']">Email is required.</small>
-        <small *ngIf="email?.errors?.['email']">Please enter a valid email address.</small>
-      </div>
+      @if (email?.invalid && (email.dirty || email.touched)) {
+        <div class="error-message">
+          @if (email.errors?.['required']) {
+            <small>Email is required.</small>
+          }
+          @if (email.errors?.['email']) {
+            <small>Please enter a valid email address.</small>
+          }
+        </div>
+      }
     </div>
 
     <div class="form-field">
       <label for="password">Password</label>
       <input id="password" type="password" formControlName="password" placeholder="Password" autocomplete="current-password">
-      <div *ngIf="password?.invalid && (password?.dirty || password?.touched)" class="error-message">
-        <small *ngIf="password?.errors?.['required']">Password is required.</small>
-        <small *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters long.</small>
-      </div>
+      @if (password?.invalid && (password.dirty || password.touched)) {
+        <div class="error-message">
+          @if (password.errors?.['required']) {
+            <small>Password is required.</small>
+          }
+          @if (password.errors?.['minlength']) {
+            <small>Password must be at least 6 characters long.</small>
+          }
+        </div>
+      }
     </div>
 
-    <div *ngIf="errorMessage" class="error-message server-error">
-      <small>{{ errorMessage }}</small>
-    </div>
+    @if (errorMessage) {
+      <div class="error-message server-error">
+        <small>{{ errorMessage }}</small>
+      </div>
+    }
 
     <button type="submit" [disabled]="loginForm.invalid || isLoading">
-      <span *ngIf="!isLoading">Login</span>
-      <span *ngIf="isLoading">Logging in...</span>
+      @if (!isLoading) {
+        <span>Login</span>
+      }
+      @if (isLoading) {
+        <span>Logging in...</span>
+      }
     </button>
   </form>
 
   <p class="additional-links">
     Don't have an account? <a [routerLink]="['/auth/signup']" class="link-button">Sign Up</a>
     <br>
-    <a [routerLink]="['/auth/forgot-password']" class="link-button">Forgot Password?</a>
-  </p>
-</div>
+      <a [routerLink]="['/auth/forgot-password']" class="link-button">Forgot Password?</a>
+    </p>
+  </div>

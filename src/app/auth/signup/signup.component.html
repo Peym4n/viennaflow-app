@@ -1,56 +1,76 @@
 <div class="signup-container">
   <h2>Sign Up</h2>
-  <ng-container *ngIf="!successMessage">
+  @if (!successMessage) {
     <form [formGroup]="signupForm" (ngSubmit)="onSubmit()" novalidate>
-    <div class="form-field">
-      <label for="email">Email</label>
-      <input id="email" type="email" formControlName="email" placeholder="your@email.com" autocomplete="email">
-      <div *ngIf="email?.invalid && (email?.dirty || email?.touched)" class="error-message">
-        <small *ngIf="email?.errors?.['required']">Email is required.</small>
-        <small *ngIf="email?.errors?.['email']">Please enter a valid email address.</small>
+      <div class="form-field">
+        <label for="email">Email</label>
+        <input id="email" type="email" formControlName="email" placeholder="your@email.com" autocomplete="email">
+        @if (email?.invalid && (email.dirty || email.touched)) {
+          <div class="error-message">
+            @if (email.errors?.['required']) {
+              <small>Email is required.</small>
+            }
+            @if (email.errors?.['email']) {
+              <small>Please enter a valid email address.</small>
+            }
+          </div>
+        }
       </div>
-    </div>
-
-    <div class="form-field">
-      <label for="password">Password</label>
-      <input id="password" type="password" formControlName="password" placeholder="Choose a password (min. 6 characters)" autocomplete="new-password">
-      <div *ngIf="password?.invalid && (password?.dirty || password?.touched)" class="error-message">
-        <small *ngIf="password?.errors?.['required']">Password is required.</small>
-        <small *ngIf="password?.errors?.['minlength']">Password must be at least 6 characters long.</small>
+      <div class="form-field">
+        <label for="password">Password</label>
+        <input id="password" type="password" formControlName="password" placeholder="Choose a password (min. 6 characters)" autocomplete="new-password">
+        @if (password?.invalid && (password.dirty || password.touched)) {
+          <div class="error-message">
+            @if (password.errors?.['required']) {
+              <small>Password is required.</small>
+            }
+            @if (password.errors?.['minlength']) {
+              <small>Password must be at least 6 characters long.</small>
+            }
+          </div>
+        }
       </div>
-    </div>
-
-    <div class="form-field">
-      <label for="confirmPassword">Confirm Password</label>
-      <input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="Confirm your password" autocomplete="new-password">
-      <div *ngIf="confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)" class="error-message">
-        <small *ngIf="confirmPassword?.errors?.['required']">Confirming your password is required.</small>
+      <div class="form-field">
+        <label for="confirmPassword">Confirm Password</label>
+        <input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="Confirm your password" autocomplete="new-password">
+        @if (confirmPassword?.invalid && (confirmPassword.dirty || confirmPassword.touched)) {
+          <div class="error-message">
+            @if (confirmPassword.errors?.['required']) {
+              <small>Confirming your password is required.</small>
+            }
+          </div>
+        }
+        @if (signupForm.errors?.['passwordsMismatch'] && (password?.dirty || confirmPassword?.dirty)) {
+          <div class="error-message">
+            <small>Passwords do not match.</small>
+          </div>
+        }
       </div>
-      <div *ngIf="signupForm.errors?.['passwordsMismatch'] && (password?.dirty || confirmPassword?.dirty)" class="error-message">
-        <small>Passwords do not match.</small>
-      </div>
-    </div>
-
-    <div *ngIf="errorMessage" class="error-message server-error">
-      <small>{{ errorMessage }}</small>
-    </div>
-
-    <!-- This block is now part of the larger success message display above -->
-
-    <button type="submit" [disabled]="signupForm.invalid || isLoading">
-      <span *ngIf="!isLoading">Sign Up</span>
-      <span *ngIf="isLoading">Signing up...</span>
-    </button>
-  </form>
-
+      @if (errorMessage) {
+        <div class="error-message server-error">
+          <small>{{ errorMessage }}</small>
+        </div>
+      }
+      <!-- This block is now part of the larger success message display above -->
+      <button type="submit" [disabled]="signupForm.invalid || isLoading">
+        @if (!isLoading) {
+          <span>Sign Up</span>
+        }
+        @if (isLoading) {
+          <span>Signing up...</span>
+        }
+      </button>
+    </form>
     <p class="additional-links">
       Already have an account? <a [routerLink]="['/auth/login']" class="link-button">Login</a>
     </p>
-  </ng-container>
+  }
 
-  <div *ngIf="successMessage" class="success-message server-success">
-    <h3>Registration Successful!</h3>
-    <p>{{ successMessage }}</p>
-    <button mat-stroked-button [routerLink]="['/auth/login']">Go to Login</button>
-  </div>
+  @if (successMessage) {
+    <div class="success-message server-success">
+      <h3>Registration Successful!</h3>
+      <p>{{ successMessage }}</p>
+      <button mat-stroked-button [routerLink]="['/auth/login']">Go to Login</button>
+    </div>
+  }
 </div>

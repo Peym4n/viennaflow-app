@@ -76,7 +76,6 @@ export class AuthService {
       }
 
       this.currentUserSubject.next(session?.user ?? null);
-      console.log(`Supabase auth event: ${event}`, session);
       // Handle specific events if necessary
       // if (event === 'SIGNED_IN') { ... }
       // if (event === 'SIGNED_OUT') { ... }
