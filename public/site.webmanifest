@@ -1,6 +1,9 @@
 {
   "name": "ViennaFlow",
   "short_name": "ViennaFlow",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/icons/web-app-manifest-192x192.png",
