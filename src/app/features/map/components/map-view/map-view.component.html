@@ -1,20 +1,24 @@
 <div class="map-container">
   <!-- Google Map Container -->
-  <div #mapContainer class="google-map"></div>
+  <div #mapContainer class="google-map" tabindex="-1" aria-label="Vienna metro map"></div>
 
   <!-- Loading Overlay -->
-  @if (isLoading) {
+  @if (isLoading()) {
     <div class="loading-overlay">
       <mat-spinner diameter="48" color="accent"></mat-spinner>
-      <p class="loading-text">Getting your location...</p>
+      <p class="loading-text" role="status">Loading map...</p>
     </div>
   }
 
   <!-- Location Error Message -->
-  @if (hasLocationError) {
+  @if (mapError()) {
+    <p class="map-error" role="alert">{{ offline() ? 'You are offline. Maps and live transit data need a connection. Reload when you are online.' : 'Could not load the map. Please reload to try again.' }}</p>
+  }
+  @if (hasLocationError() || offline()) {
     <div class="location-alert">
-      <mat-icon class="location-alert-icon">location_disabled</mat-icon>
-      <span>Please enable location services to use this app</span>
+      <mat-icon class="location-alert-icon" aria-hidden="true">{{ offline() ? 'wifi_off' : 'location_disabled' }}</mat-icon>
+      <span role="status">{{ offline() ? 'You are offline. Live departures and walking estimates are unavailable.' : 'Your location is unavailable. You can still choose a station.' }}</span>
+      @if (!offline()) { <button mat-button (click)="retryLocation()">Retry</button> }
     </div>
   }
 
@@ -23,13 +27,26 @@
     <button mat-fab color="primary" aria-label="Recenter map" (click)="recenterMap()" class="control-button">
       <mat-icon>my_location</mat-icon>
     </button>
-    <button mat-fab aria-label="Toggle metro lines" (click)="toggleMetroLines()" 
-            class="control-button" [class.toggle-active]="showMetroLines" [class.toggle-inactive]="!showMetroLines">
+    <button mat-fab aria-label="Toggle metro lines" (click)="toggleMetroLines()"
+            class="control-button" [class.toggle-active]="showMetroLines()" [attr.aria-pressed]="showMetroLines()">
       <mat-icon>subway</mat-icon>
     </button>
-    <button mat-fab aria-label="Toggle station markers" (click)="toggleStations()" 
-            class="control-button" [class.toggle-active]="showStations" [class.toggle-inactive]="!showStations">
+    <button mat-fab aria-label="Toggle station markers" (click)="toggleStations()"
+            class="control-button" [class.toggle-active]="showStations()" [attr.aria-pressed]="showStations()">
       <mat-icon>place</mat-icon>
     </button>
+    <button #stationChoiceButton mat-fab aria-label="Choose a station" (click)="toggleStationPicker()"
+      class="control-button" [attr.aria-expanded]="showStationPicker()" aria-controls="station-picker-panel" [disabled]="isLoading() || mapError()">
+      <mat-icon>search</mat-icon>
+    </button>
   </div>
+  @if (showStationPicker()) {
+    <div class="station-picker" id="station-picker-panel" (keydown.escape)="toggleStationPicker(); stationChoiceButton.focus()">
+      <label for="station-picker">Choose a station</label>
+      <select #stationPicker id="station-picker" (change)="chooseStation($event)">
+        <option value="">Select a station…</option>
+        @for (station of stationOptions(); track station.id) { <option [value]="station.id">{{ station.name }}</option> }
+      </select>
+    </div>
+  }
 </div>

@@ -1,58 +1,47 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { of } from 'rxjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstValueFrom } from 'rxjs';
 import { GoogleMapsService } from './google-maps.service';
 
-describe('GoogleMapsService', () => {
-  let service: GoogleMapsService;
-  let originalEnvironment: any;
-  
-  beforeEach(() => {
-    // Store the original environment if it exists
-    if (typeof (global as any).environment !== 'undefined') {
-      originalEnvironment = (global as any).environment;
-    }
-    
-    // Mock environment object with the API key
-    vi.stubGlobal('environment', { googleMaps: { apiKey: 'mock-api-key' } });
-    
-    // Create service instance directly
-    service = new GoogleMapsService();
-    
-    // Replace the private API_KEY field for testing
-    Object.defineProperty(service, 'API_KEY', { value: 'mock-api-key' });
-    
-    // Mock document.createElement method
-    const mockScript = {
-      setAttribute: vi.fn(),
-      onload: null,
-      onerror: null
-    };
-    
-    vi.spyOn(document, 'createElement').mockImplementation(() => mockScript as any);
-    
-    // Mock appendChild method of document.head
-    vi.spyOn(document.head, 'appendChild').mockImplementation(() => document.createElement('script') as Node);
-  });
-  
+describe('Google Maps SDK loading', () => {
   afterEach(() => {
-    // Restore mocks
-    vi.restoreAllMocks();
-    
-    // Restore the original environment
-    if (originalEnvironment) {
-      (global as any).environment = originalEnvironment;
-    } else {
-      vi.unstubAllGlobals();
-    }
+    document.getElementById('google-maps-script')?.remove();
+    delete window.initMap;
+    vi.useRealTimers();
   });
 
-  it('should be created', () => {
-    expect(service).toBeDefined();
+  it('shares one SDK request until both callers complete', async () => {
+    const service = new GoogleMapsService();
+    const first = firstValueFrom(service.loadGoogleMapsApi());
+    const second = firstValueFrom(service.loadGoogleMapsApi());
+    expect(document.querySelectorAll('#google-maps-script')).toHaveLength(1);
+    expect(document.querySelector<HTMLScriptElement>('#google-maps-script')!.src).toContain('libraries=geometry');
+    vi.stubGlobal('google', { maps: { geometry: {} } });
+    window.initMap!();
+    await Promise.all([first, second]);
+    expect(service.isGoogleMapsLoaded()).toBe(true);
   });
-  
-  it('should attempt to load Google Maps API when requested', () => {
-    const appendChildSpy = vi.spyOn(document.head, 'appendChild');
-    service.loadGoogleMapsApi();
-    expect(appendChildSpy).toHaveBeenCalled();
+
+  it('removes a failed script and allows a subsequent attempt', async () => {
+    const service = new GoogleMapsService();
+    const first = firstValueFrom(service.loadGoogleMapsApi());
+    const failed = expect(first).rejects.toThrow('Could not load Maps');
+    document.querySelector('#google-maps-script')!.dispatchEvent(new Event('error'));
+    await failed;
+    expect(document.querySelector('#google-maps-script')).toBeNull();
+    const retry = firstValueFrom(service.loadGoogleMapsApi());
+    vi.stubGlobal('google', { maps: { geometry: {} } });
+    window.initMap!();
+    await retry;
+  });
+
+  it('bounds loading when the SDK never calls back', async () => {
+    vi.useFakeTimers();
+    const service = new GoogleMapsService();
+    const result = firstValueFrom(service.loadGoogleMapsApi());
+    const failed = expect(result).rejects.toThrow('timed out');
+    await vi.advanceTimersByTimeAsync(30000);
+    await failed;
+    expect(window.initMap).toBeUndefined();
+    expect(document.querySelector('#google-maps-script')).toBeNull();
   });
 });
