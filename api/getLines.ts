@@ -1,5 +1,6 @@
+import { sendJson, validIdQuery } from '../server/http.js';
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import * as dotenvx from "@dotenvx/dotenvx";
+import { getServerEnv as getEnv } from '../server/environment.js';
 import { IncomingMessage, ServerResponse } from 'http';
 
 // Define a type for the expected query parameters
@@ -13,10 +14,7 @@ interface VercelRequest extends IncomingMessage {
 }
 
 // Helper to send JSON response
-function sendJson(res: ServerResponse, statusCode: number, data: any): void {
-  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(data));
-}
+
 
 // Define a type for the expected data from the 'linien' table (adjust as needed)
 interface Linie {
@@ -33,10 +31,20 @@ export default async function handler(
   req: VercelRequest,
   res: ServerResponse
 ): Promise<void> {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (!validIdQuery(req.query.lineid)) {
+    sendJson(res, 400, { error: 'Invalid query IDs' });
+    return;
+  }
+
   const { lineid } = req.query;
 
-  const supabaseUrl = dotenvx.get("SUPABASE_URL");
-  const supabaseAnonKey = dotenvx.get("SUPABASE_ANON_KEY");
+  const supabaseUrl = getEnv('SUPABASE_URL');
+  const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase URL or Anon Key is missing for getLines");
@@ -61,9 +69,9 @@ export default async function handler(
 
   if (error) {
     console.error("Supabase error in getLines:", error);
-    sendJson(res, 500, { error: error.message });
+    sendJson(res, 500, { error: 'Transit data could not be loaded' });
     return;
   }
 
   sendJson(res, 200, data);
-} 
+}

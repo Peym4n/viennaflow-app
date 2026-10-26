@@ -1,6 +1,7 @@
+import { sendJson, validIdQuery } from '../server/http.js';
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import * as dotenvx from "@dotenvx/dotenvx";
-import wkx from "wkx";
+import { getServerEnv as getEnv } from '../server/environment.js';
+import { parseWkbPoint } from '../server/geometry.js';
 import { IncomingMessage, ServerResponse } from 'http';
 
 // --- Common Vercel Request/Response Types ---
@@ -13,10 +14,7 @@ interface VercelRequest extends IncomingMessage {
   query: QueryParams;
 }
 
-function sendJson(res: ServerResponse, statusCode: number, data: any): void {
-  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(data));
-}
+
 
 // --- GeoJSON Basic Types (reuse if defined elsewhere) ---
 interface GeoJsonGeometry {
@@ -76,10 +74,20 @@ export default async function handler(
   req: VercelRequest,
   res: ServerResponse
 ): Promise<void> {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (!validIdQuery(req.query.linien_id) || !validIdQuery(req.query.haltestellen_ids, true)) {
+    sendJson(res, 400, { error: 'Invalid query IDs' });
+    return;
+  }
+
   const { haltestellen_ids, linien_id } = req.query;
 
-  const supabaseUrl = dotenvx.get("SUPABASE_URL");
-  const supabaseAnonKey = dotenvx.get("SUPABASE_ANON_KEY");
+  const supabaseUrl = getEnv("SUPABASE_URL");
+  const supabaseAnonKey = getEnv("SUPABASE_ANON_KEY");
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase URL or Anon Key is missing for getStops");
@@ -170,8 +178,7 @@ export default async function handler(
       .filter((item): item is HaltestelleDataFromDB => Boolean(item)); // Type guard
 
     const features: HaltestelleGeoJsonFeature[] = sortedData.map(halt => {
-      const wkbBuffer = Buffer.from(halt.location, "hex");
-      const geometry = wkx.Geometry.parse(wkbBuffer).toGeoJSON() as GeoJsonGeometry;
+      const geometry = parseWkbPoint(halt.location);
 
       return {
         type: "Feature",
@@ -189,6 +196,6 @@ export default async function handler(
 
   } catch (error: any) {
     console.error("Error in getStops API:", error.message, error.details || '');
-    sendJson(res, 500, { error: error.message });
+    sendJson(res, 500, { error: 'Transit data could not be loaded' });
   }
-} 
+}

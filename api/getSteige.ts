@@ -1,6 +1,7 @@
+import { sendJson, validIdQuery } from '../server/http.js';
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import * as dotenvx from "@dotenvx/dotenvx";
-import wkx from "wkx";
+import { getServerEnv as getEnv } from '../server/environment.js';
+import { parseWkbPoint } from '../server/geometry.js';
 import { IncomingMessage, ServerResponse } from 'http';
 
 // --- Common Vercel Request/Response Types ---
@@ -12,10 +13,7 @@ interface VercelRequest extends IncomingMessage {
   query: QueryParams;
 }
 
-function sendJson(res: ServerResponse, statusCode: number, data: any): void {
-  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(data));
-}
+
 
 // --- GeoJSON Basic Types (simplified, reuse if defined elsewhere) ---
 interface GeoJsonGeometry { // A generic GeoJSON geometry type
@@ -67,6 +65,16 @@ export default async function handler(
   req: VercelRequest,
   res: ServerResponse
 ): Promise<void> {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (!validIdQuery(req.query.stopid)) {
+    sendJson(res, 400, { error: 'Invalid query IDs' });
+    return;
+  }
+
   const { stopid } = req.query;
   // console.log("API getSteige called with stopid:", stopid); // More descriptive log
 
@@ -77,8 +85,8 @@ export default async function handler(
     return;
   }
 
-  const supabaseUrl = dotenvx.get("SUPABASE_URL");
-  const supabaseAnonKey = dotenvx.get("SUPABASE_ANON_KEY");
+  const supabaseUrl = getEnv("SUPABASE_URL");
+  const supabaseAnonKey = getEnv("SUPABASE_ANON_KEY");
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Supabase URL or Anon Key is missing for getSteige");
@@ -95,7 +103,7 @@ export default async function handler(
 
   if (error) {
     console.error("Supabase error in getSteige:", error);
-    sendJson(res, 500, { error: error.message });
+    sendJson(res, 500, { error: 'Transit data could not be loaded' });
     return;
   }
 
@@ -106,9 +114,9 @@ export default async function handler(
 
   try {
     const features: SteigGeoJsonFeature[] = data.map((steigeRecord) => {
-      const wkbBuffer = Buffer.from(steigeRecord.location, "hex");
-      // The geometry type parsed by wkx can be various GeoJSON geometry types
-      const geometry = wkx.Geometry.parse(wkbBuffer).toGeoJSON() as GeoJsonGeometry; // Type assertion
+
+      // Transit platforms must contain a valid point geometry
+      const geometry = parseWkbPoint(steigeRecord.location);
 
       return {
         type: "Feature",
@@ -135,6 +143,6 @@ export default async function handler(
 
   } catch (conversionError: any) {
     console.error("Error converting WKB to GeoJSON in getSteige:", conversionError);
-    sendJson(res, 500, { error: "Error processing geometry data", details: conversionError.message });
+    sendJson(res, 500, { error: "Error processing geometry data", details: undefined });
   }
-} 
+}

@@ -6,6 +6,33 @@ export interface GeoJsonPoint {
   coordinates: [number, number]; // [longitude, latitude]
 }
 
+export interface MetroLine {
+  bezeichnung: string;
+  farbe: string;
+  reihenfolge: number;
+  echtzeit: boolean;
+  stops: GeoJsonFeatureCollection;
+  lineStrings: GeoJsonLineString[];
+}
+
+export interface GeoJsonLineString { type: string; coordinates: [number, number][]; }
+export interface GeoJsonFeatureCollection { type: string; features: GeoJsonFeature[]; }
+export interface GeoJsonFeature {
+  type: string;
+  geometry: GeoJsonPoint;
+  properties: {
+    haltestellen_id: number;
+    diva: number;
+    name: string;
+    linien_ids: number[];
+    physical_location?: GeoJsonPoint;
+  };
+}
+export interface LineStopsResponse {
+  metainfo: { last_updated: string; version: string; };
+  lines: Record<string, MetroLine>;
+}
+
 // This is what the API endpoint might initially fetch or expect in some forms.
 export interface RawNearbySteig {
   steig_id: number;
@@ -121,4 +148,19 @@ export interface MonitorApiResponse {
   errorOccurred?: boolean;
   timestamp?: number;
   error?: string;
+  stations?: Record<string, StationMonitorStatus>;
 }
+
+export interface StationMonitorStatus {
+  status: 'data' | 'empty' | 'pending' | 'stale' | 'error';
+  updatedAt?: number;
+  retryAfterMs?: number;
+}
+
+export interface LatLng { lat: number; lng: number; }
+export interface WalkingPayload { origins: LatLng[]; destinations: LatLng[]; }
+export interface WalkingMatrix {
+  status: 'OK';
+  rows: { elements: { status: string; duration?: { value: number; text?: string } }[] }[];
+}
+export interface SigningSessionResponse { sessionSigningKey: string; expiresAt?: number; }
