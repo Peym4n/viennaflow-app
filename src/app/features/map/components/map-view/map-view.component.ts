@@ -10,6 +10,7 @@ import { LatLng } from '@shared-types/api-models';
 import { GoogleMapsService } from '../../../../core/services/google-maps.service';
 import { ApiService } from '../../../../core/services/api.service';
 import { LocationService } from '../../../../core/services/location.service';
+import { AutofocusDirective } from '../../../../shared/directives/autofocus.directive';
 import { StationDepartureState } from '../../station-departures';
 import { WalkingTimes } from '../../walking-times';
 import { GoogleMapFacade } from '../../google-map-facade';
@@ -20,7 +21,7 @@ import { MapStation, catalogStations, closestStations, stationCard } from '../..
   selector: 'app-map-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [LocationService, GoogleMapFacade],
-  imports: [MatAutocomplete, MatAutocompleteTrigger, MatOption, MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
+  imports: [AutofocusDirective, MatAutocomplete, MatAutocompleteTrigger, MatOption, MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
   templateUrl: './map-view.component.html',
   styleUrl: './map-view.component.css',
 })
@@ -41,9 +42,6 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   });
   @ViewChild('mapContainer') mapContainer!: ElementRef<HTMLElement>;
   @ViewChild('stationChoiceButton', { read: ElementRef }) private stationChoiceButton?: ElementRef<HTMLElement>;
-  @ViewChild('stationPicker') set stationPicker(element: ElementRef<HTMLInputElement> | undefined) {
-    element?.nativeElement.focus();
-  }
   private readonly snackBar = inject(MatSnackBar);
   private readonly injector = inject(Injector);
   private readonly mapsService = inject(GoogleMapsService);

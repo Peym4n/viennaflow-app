@@ -173,6 +173,18 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(api.getRealTimeDepartures).not.toHaveBeenCalled();
   });
 
+  it('focuses the deferred search input when it first appears without an extra interaction', async () => {
+    const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
+    trigger.focus(); trigger.click(); fixture.detectChanges();
+    const [pickerBlock] = await fixture.getDeferBlocks();
+    await pickerBlock.render(DeferBlockState.Loading);
+    expect(fixture.nativeElement.querySelector('#station-picker')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await pickerBlock.render(DeferBlockState.Complete);
+    await vi.advanceTimersByTimeAsync(0); fixture.detectChanges();
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#station-picker'));
+  });
+
   it('explains loading and failure while the optional station chooser loads', async () => {
     const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
     trigger.click(); fixture.detectChanges();
@@ -209,7 +221,8 @@ describe('Map station selection, rendering and lifecycle', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#station-picker')).toBeNull();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Choose a station');
-    await openPicker('');
+    const reopened = await openPicker('');
+    expect(document.activeElement).toBe(reopened);
     expect(options()).toHaveLength(4);
   });
 

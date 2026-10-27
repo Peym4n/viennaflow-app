@@ -44,7 +44,7 @@
     <div class="station-picker" id="station-picker-panel" (keydown.escape)="toggleStationPicker(); stationChoiceButton.focus()">
       @defer (on immediate) {
         <label for="station-picker">Find a station</label>
-        <input #stationPicker id="station-picker" type="text" placeholder="Search stations…" autocomplete="off"
+        <input appAutofocus id="station-picker" type="text" placeholder="Search stations…" autocomplete="off"
           [value]="stationQuery()" (input)="searchStations($event)" [matAutocomplete]="stationAutocomplete">
         <mat-autocomplete #stationAutocomplete="matAutocomplete" [autoActiveFirstOption]="true"
           (optionSelected)="chooseStation($event.option.value)">
