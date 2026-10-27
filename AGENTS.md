@@ -133,6 +133,7 @@ The following sections describe the current map behavior, backend contracts, con
 ### Map behavior and overlays
 
 - Preserve the responsive map interface, transit-line rendering, station markers, and user-location marker.
+- Show ordinary station dots by default, with a toggle to hide/show them. They share high-resolution PNG icons cached by line color in the map facade; rendering individual vector symbols for all stations slows panning. Preserve marker titles, keyboard/click selection and nearby highlights. Change marker/line visibility and highlight icons only when their values change; departure refreshes must not reset every map object.
 - Nearby results represent individual platforms or transit points (`Steige`). Link each result to its main station (`Haltestelle`) using `fk_haltestellen_id`, and use `haltestellen_diva` to request monitor data.
 - Deduplicate nearby highlights and overlays by main station ID, even when several nearby platforms belong to the same station. Keep station IDs and DIVA identifiers distinct when matching monitor data and updating overlays.
 - Keep the nearby search radius at 800 meters. From eligible main stations, preload departures and walking estimates for up to three closest stations, ranked by physical coordinates with station ID as the distance tie-breaker. Do not extend the radius to reach three. Keep their dots visible independently of card visibility.

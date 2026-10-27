@@ -14,6 +14,12 @@ export function installGoogleMaps() {
     lng() { return this.longitude; }
     equals(other: LatLng) { return this.lat() === other.lat() && this.lng() === other.lng(); }
   }
+  class Size {
+    constructor(readonly width: number, readonly height: number) {}
+  }
+  class Point {
+    constructor(readonly x: number, readonly y: number) {}
+  }
   class Events {
     listeners = new Map<string, (() => void)[]>();
     addListener(name: string, callback: () => void) {
@@ -46,7 +52,7 @@ export function installGoogleMaps() {
     setPosition(position: LatLng) { this.position = position; }
     getTitle() { return this.options.title; }
     getIcon() { return this.options.icon; }
-    setIcon(icon: google.maps.Symbol) { this.options.icon = icon; }
+    setIcon = vi.fn((icon: google.maps.Symbol | google.maps.Icon) => { this.options.icon = icon; });
     setMap(map: unknown) { this.map = map; }
     setVisible = vi.fn();
   }
@@ -75,7 +81,7 @@ export function installGoogleMaps() {
     setVisible = vi.fn();
   }
   vi.stubGlobal('google', { maps: {
-    Map: MapDouble, Marker, OverlayView, Polyline, LatLng,
+    Map: MapDouble, Marker, OverlayView, Polyline, LatLng, Size, Point,
     SymbolPath: { CIRCLE: 0 }, ControlPosition: { RIGHT_CENTER: 1, LEFT_TOP: 2 },
     geometry: { spherical: { computeDistanceBetween: (a: LatLng | google.maps.LatLngLiteral, b: LatLng | google.maps.LatLngLiteral) => {
       const lat = (point: LatLng | google.maps.LatLngLiteral) => typeof point.lat === 'function' ? point.lat() : point.lat;

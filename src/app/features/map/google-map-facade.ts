@@ -31,6 +31,9 @@ export class GoogleMapFacade {
   private userMarker: google.maps.Marker | null = null;
   private previousPosition: LatLng | null = null;
   private mobile: boolean | null = null;
+  private stationsVisible = false;
+  private linesVisible = true;
+  private readonly stationIcons = new Map<string, google.maps.Icon | google.maps.Symbol>();
   private readonly markers = new Map<number, google.maps.Marker>();
   private readonly highlights = new Map<number, google.maps.Marker>();
   private readonly polylines: google.maps.Polyline[] = [];
@@ -78,8 +81,14 @@ export class GoogleMapFacade {
       this.map.setOptions({ zoomControlOptions: { position }, cameraControlOptions: { position } });
       this.mobile = scene.mobile;
     }
-    this.markers.forEach(marker => marker.setVisible(scene.showStations));
-    this.polylines.forEach(polyline => polyline.setVisible(scene.showLines));
+    if (this.stationsVisible !== scene.showStations) {
+      this.markers.forEach(marker => marker.setVisible(scene.showStations));
+      this.stationsVisible = scene.showStations;
+    }
+    if (this.linesVisible !== scene.showLines) {
+      this.polylines.forEach(polyline => polyline.setVisible(scene.showLines));
+      this.linesVisible = scene.showLines;
+    }
     const highlighted = new Set(scene.nearbyIds);
     if (scene.selectedId !== null) highlighted.add(scene.selectedId);
     for (const [id, marker] of this.highlights) {
@@ -93,7 +102,10 @@ export class GoogleMapFacade {
       if (!marker) {
         marker = this.makeMarker(station, color, true);
         this.highlights.set(id, marker);
-      } else marker.setIcon({ ...(marker.getIcon() as google.maps.Symbol), fillColor: color });
+      } else {
+        const icon = marker.getIcon() as google.maps.Symbol;
+        if (icon.fillColor !== color) marker.setIcon({ ...icon, fillColor: color });
+      }
     }
     const wanted = new Set(scene.cards.map(card => card.station.id));
     for (const [id, card] of this.cards) {
@@ -178,16 +190,47 @@ export class GoogleMapFacade {
     if (this.map) google.maps.event.clearInstanceListeners(this.map);
     this.map = null;
     this.mobile = null;
+    this.stationsVisible = false;
+    this.linesVisible = true;
+    this.stationIcons.clear();
   }
 
   private makeMarker(station: MapStation, fillColor: string, highlight: boolean): google.maps.Marker {
     const marker = new google.maps.Marker({
+      // Separate markers retain keyboard access; shared PNG icons keep vector-map panning inexpensive.
       position: station.position, map: this.map, title: station.name, visible: highlight, optimized: false,
-      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: station.color, strokeWeight: 3 },
+      icon: highlight
+        ? { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: station.color, strokeWeight: 3 }
+        : this.stationIcon(station.color),
       ...(highlight ? { zIndex: google.maps.Marker.MAX_ZINDEX + 1 } : {}),
     });
     marker.addListener('click', () => this.zone.run(() => this.actions.selectStation(station.id)));
     return marker;
+  }
+
+  private stationIcon(color: string): google.maps.Icon | google.maps.Symbol {
+    const cached = this.stationIcons.get(color);
+    if (cached) return cached;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 60;
+    const context = canvas.getContext('2d');
+    let icon: google.maps.Icon | google.maps.Symbol;
+    if (context) {
+      // Render once at 3x resolution, retaining the existing circle size and line color.
+      context.scale(3, 3);
+      context.beginPath();
+      context.arc(10, 10, 7, 0, 2 * Math.PI);
+      context.fillStyle = 'white';
+      context.fill();
+      context.strokeStyle = color;
+      context.lineWidth = 3;
+      context.stroke();
+      icon = { url: canvas.toDataURL('image/png'), scaledSize: new google.maps.Size(20, 20), anchor: new google.maps.Point(10, 10) };
+    } else {
+      icon = { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: 'white', fillOpacity: 1, strokeColor: color, strokeWeight: 3 };
+    }
+    this.stationIcons.set(color, icon);
+    return icon;
   }
 
   private removeMarker(marker: google.maps.Marker): void {

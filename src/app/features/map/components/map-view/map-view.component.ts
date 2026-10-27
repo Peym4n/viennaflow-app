@@ -29,7 +29,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly showLocationWarning = signal(false);
   readonly offline = signal(typeof navigator !== 'undefined' && !navigator.onLine);
   readonly showMetroLines = signal(true);
-  readonly showStations = signal(false);
+  readonly showStations = signal(true);
   readonly showStationPicker = signal(false);
   readonly stationOptions = signal<MapStation[]>([]);
   readonly stationQuery = signal('');

@@ -51,6 +51,10 @@ describe('Map station selection, rendering and lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     sdk = installGoogleMaps();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      scale: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(), stroke: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,test');
     response = new Subject<MonitorApiResponse>();
     coordinates = new ReplaySubject<Coordinates>(1);
     locationAvailable = new Subject<boolean>();
@@ -212,9 +216,66 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(document.querySelector('[role="listbox"]')).toBeNull();
   });
 
-  it('preserves hidden station defaults and explicitly enables one-finger map gestures', () => {
+  it('shows station dots by default and allows toggling them off and back on', () => {
+    expect(fixture.componentInstance.showStations()).toBe(true);
+    expect(sdk.markers.every(marker => marker.setVisible.mock.lastCall?.[0] === true)).toBe(true);
+    fixture.componentInstance.toggleStations();
     expect(fixture.componentInstance.showStations()).toBe(false);
+    expect(sdk.markers.every(marker => marker.setVisible.mock.lastCall?.[0] === false)).toBe(true);
+    fixture.componentInstance.toggleStations();
+    expect(fixture.componentInstance.showStations()).toBe(true);
+    expect(sdk.markers.every(marker => marker.setVisible.mock.lastCall?.[0] === true)).toBe(true);
     expect(sdk.maps[0].options.gestureHandling).toBe('greedy');
+  });
+
+  it('shares raster icons across stations and retains dot selection and card focus', () => {
+    const dots = [...sdk.markers];
+    const icon = dots[0].getIcon() as google.maps.Icon;
+    expect(icon.url).toMatch(/^data:image\/png;/);
+    expect(dots.every(dot => dot.getIcon() === icon)).toBe(true);
+    expect(dots.map(dot => dot.getTitle())).toEqual(['Tscherttegasse', 'Second station', 'Third station', 'Fourth station']);
+    expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledTimes(1);
+    select('Third station');
+    expect(selectedCard().textContent).toContain('Third station');
+    expect(document.activeElement).toBe(selectedCard().querySelector('.overlay-close-button'));
+    expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates departures without resetting unchanged dots, highlights or line visibility', () => {
+    const dots = [...sdk.markers];
+    coordinates.next({ latitude: 48.2, longitude: 16.3, timestamp: 1000 });
+    vi.advanceTimersByTime(0);
+    const markers = [...sdk.markers];
+    const highlights = markers.filter(marker => marker.options.visible === true);
+    response.next({ ...monitorSample, timestamp: Date.now() });
+    resize(true); resize(false);
+    expect(cards()[0].textContent).toContain('Floridsdorf');
+    expect(sdk.markers).toEqual(markers);
+    expect(dots.every(dot => dot.setVisible.mock.calls.length === 1)).toBe(true);
+    expect(highlights.every(dot => dot.setIcon.mock.calls.length === 0)).toBe(true);
+    expect(sdk.polylines.every(line => line.setVisible.mock.calls.length === 0)).toBe(true);
+    fixture.componentInstance.toggleMetroLines();
+    fixture.componentInstance.toggleStations();
+    response.next({ ...monitorSample, timestamp: Date.now() });
+    expect(dots.every(dot => dot.setVisible.mock.calls.length === 2 && dot.setVisible.mock.lastCall?.[0] === false)).toBe(true);
+    expect(sdk.polylines.every(line => line.setVisible.mock.calls.length === 1 && line.setVisible.mock.lastCall?.[0] === false)).toBe(true);
+    expect(cards()).toHaveLength(1);
+    expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledTimes(1);
+    select('Third station');
+    const thirdDot = highlights.find(dot => dot.getTitle() === 'Third station')!;
+    expect((thirdDot.getIcon() as google.maps.Symbol).fillColor).toBe('#ADD8E6');
+    selectedCard().querySelector<HTMLButtonElement>('.overlay-close-button')!.click();
+    expect((thirdDot.getIcon() as google.maps.Symbol).fillColor).toBe('#6495ED');
+  });
+
+  it('keeps station dots selectable if a canvas context is unavailable', () => {
+    fixture.destroy();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    fixture = TestBed.createComponent(MapViewComponent);
+    fixture.detectChanges();
+    sdk.markers.find(marker => marker.getTitle() === 'Fourth station' && marker.map !== null)!.trigger('click');
+    fixture.detectChanges();
+    expect(selectedCard().textContent).toContain('Fourth station');
   });
 
   it('renders cached departures using the fixture DIVA in locationStop.properties.name', () => {
