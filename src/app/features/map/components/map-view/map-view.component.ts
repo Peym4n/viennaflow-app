@@ -13,6 +13,7 @@ import { LocationService } from '../../../../core/services/location.service';
 import { StationDepartureState } from '../../station-departures';
 import { WalkingTimes } from '../../walking-times';
 import { GoogleMapFacade } from '../../google-map-facade';
+import { MapDisplayPreferences } from '../../map-display-preferences';
 import { MapStation, catalogStations, closestStations, stationCard } from '../../map-presentation';
 
 @Component({
@@ -24,12 +25,13 @@ import { MapStation, catalogStations, closestStations, stationCard } from '../..
   styleUrl: './map-view.component.css',
 })
 export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly displayPreferences = inject(MapDisplayPreferences);
   readonly isLoading = signal(true);
   readonly mapError = signal(false);
   readonly showLocationWarning = signal(false);
   readonly offline = signal(typeof navigator !== 'undefined' && !navigator.onLine);
-  readonly showMetroLines = signal(true);
-  readonly showStations = signal(true);
+  readonly showMetroLines = signal(this.displayPreferences.isVisible('metroLines'));
+  readonly showStations = signal(this.displayPreferences.isVisible('stations'));
   readonly showStationPicker = signal(false);
   readonly stationOptions = signal<MapStation[]>([]);
   readonly stationQuery = signal('');
@@ -119,8 +121,16 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
 
   retryLocation(): void { this.location.retryLocationAccess(); }
   recenterMap(): void { this.rendering.recenter(); }
-  toggleMetroLines(): void { this.showMetroLines.update(value => !value); this.render(); }
-  toggleStations(): void { this.showStations.update(value => !value); this.render(); }
+  toggleMetroLines(): void {
+    this.showMetroLines.update(value => !value);
+    this.displayPreferences.setVisible('metroLines', this.showMetroLines());
+    this.render();
+  }
+  toggleStations(): void {
+    this.showStations.update(value => !value);
+    this.displayPreferences.setVisible('stations', this.showStations());
+    this.render();
+  }
   toggleStationPicker(): void {
     this.stationQuery.set('');
     this.showStationPicker.update(value => !value);

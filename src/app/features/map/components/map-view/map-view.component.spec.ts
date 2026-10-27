@@ -50,6 +50,8 @@ describe('Map station selection, rendering and lifecycle', () => {
   afterAll(() => TestBed.resetTestEnvironment());
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorage.removeItem('viennaflow.map.metroLines');
+    localStorage.removeItem('viennaflow.map.stations');
     sdk = installGoogleMaps();
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       scale: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(), stroke: vi.fn(),
@@ -85,6 +87,8 @@ describe('Map station selection, rendering and lifecycle', () => {
     TestBed.resetTestingModule();
     sdk.dispose();
     vi.useRealTimers();
+    localStorage.removeItem('viennaflow.map.metroLines');
+    localStorage.removeItem('viennaflow.map.stations');
   });
 
   function select(title: string) {
@@ -239,6 +243,55 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(selectedCard().textContent).toContain('Third station');
     expect(document.activeElement).toBe(selectedCard().querySelector('.overlay-close-button'));
     expect(HTMLCanvasElement.prototype.toDataURL).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { lines: false, stations: true },
+    { lines: true, stations: false },
+    { lines: false, stations: false },
+    { lines: true, stations: true },
+  ])('restores independent display preferences after reopening the map: %o', ({ lines, stations }) => {
+    // Change both controls first so the enabled case also tests saved values.
+    fixture.componentInstance.toggleMetroLines();
+    fixture.componentInstance.toggleStations();
+    if (lines) fixture.componentInstance.toggleMetroLines();
+    if (stations) fixture.componentInstance.toggleStations();
+    fixture.destroy();
+    fixture = TestBed.createComponent(MapViewComponent);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showMetroLines()).toBe(lines);
+    expect(fixture.componentInstance.showStations()).toBe(stations);
+    expect(fixture.nativeElement.querySelector('[aria-label="Toggle metro lines"]').getAttribute('aria-pressed')).toBe(String(lines));
+    expect(fixture.nativeElement.querySelector('[aria-label="Toggle station markers"]').getAttribute('aria-pressed')).toBe(String(stations));
+    expect(sdk.markers.filter(marker => marker.map !== null).every(marker => marker.getVisible() === stations)).toBe(true);
+    expect(sdk.polylines.at(-1)!.getVisible()).toBe(lines);
+  });
+
+  it('uses visible defaults when saved display preferences are invalid', () => {
+    fixture.destroy();
+    localStorage.setItem('viennaflow.map.metroLines', 'null');
+    localStorage.setItem('viennaflow.map.stations', 'not-a-boolean');
+    fixture = TestBed.createComponent(MapViewComponent);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showMetroLines()).toBe(true);
+    expect(fixture.componentInstance.showStations()).toBe(true);
+  });
+
+  it('keeps both toggles and station selection usable when storage reads and writes fail', () => {
+    fixture.destroy();
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage blocked'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage full'); });
+    fixture = TestBed.createComponent(MapViewComponent);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showMetroLines()).toBe(true);
+    expect(fixture.componentInstance.showStations()).toBe(true);
+    fixture.componentInstance.toggleMetroLines();
+    fixture.componentInstance.toggleStations();
+    expect(fixture.componentInstance.showMetroLines()).toBe(false);
+    expect(fixture.componentInstance.showStations()).toBe(false);
+    fixture.componentInstance.toggleStations();
+    sdk.markers.find(marker => marker.getTitle() === 'Fourth station' && marker.map !== null)!.trigger('click');
+    expect(selectedCard().textContent).toContain('Fourth station');
   });
 
   it('updates departures without resetting unchanged dots, highlights or line visibility', () => {

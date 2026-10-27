@@ -41,11 +41,13 @@ export function installGoogleMaps() {
     static MAX_ZINDEX = 1000;
     map: unknown;
     position: LatLng;
+    private visible: boolean;
     constructor(readonly options: google.maps.MarkerOptions) {
       super();
       const position = options.position as google.maps.LatLngLiteral;
       this.position = position instanceof LatLng ? position : new LatLng(position.lat, position.lng);
       this.map = options.map;
+      this.visible = options.visible ?? true;
       markers.push(this);
     }
     getPosition() { return this.position; }
@@ -54,7 +56,8 @@ export function installGoogleMaps() {
     getIcon() { return this.options.icon; }
     setIcon = vi.fn((icon: google.maps.Symbol | google.maps.Icon) => { this.options.icon = icon; });
     setMap(map: unknown) { this.map = map; }
-    setVisible = vi.fn();
+    getVisible() { return this.visible; }
+    setVisible = vi.fn((visible: boolean) => { this.visible = visible; });
   }
   class OverlayView {
     static preventMapHitsAndGesturesFrom = vi.fn();
@@ -76,9 +79,15 @@ export function installGoogleMaps() {
     draw() {}
   }
   class Polyline extends Events {
-    constructor(_options: unknown) { super(); polylines.push(this); }
+    private visible: boolean;
+    constructor(options: google.maps.PolylineOptions) {
+      super();
+      this.visible = options.visible ?? true;
+      polylines.push(this);
+    }
     setMap = vi.fn();
-    setVisible = vi.fn();
+    getVisible() { return this.visible; }
+    setVisible = vi.fn((visible: boolean) => { this.visible = visible; });
   }
   vi.stubGlobal('google', { maps: {
     Map: MapDouble, Marker, OverlayView, Polyline, LatLng, Size, Point,
