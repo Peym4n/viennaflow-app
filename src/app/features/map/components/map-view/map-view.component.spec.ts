@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -39,6 +39,7 @@ describe('Map station selection, rendering and lifecycle', () => {
   let fixture: ComponentFixture<MapViewComponent>;
   let response: Subject<MonitorApiResponse>;
   let coordinates: ReplaySubject<Coordinates>;
+  let locationAvailable: Subject<boolean>;
   let media: { matches: boolean; addEventListener: ReturnType<typeof vi.fn>; removeEventListener: ReturnType<typeof vi.fn>; addListener: ReturnType<typeof vi.fn>; removeListener: ReturnType<typeof vi.fn> };
   let api: { getMetroLineStops: ReturnType<typeof vi.fn>; getRealTimeDepartures: ReturnType<typeof vi.fn>; getNearbySteige: ReturnType<typeof vi.fn>; getSecureWalkingMatrix: ReturnType<typeof vi.fn> };
   const cards = () => Array.from(document.querySelectorAll<HTMLElement>('app-station-card'));
@@ -52,6 +53,7 @@ describe('Map station selection, rendering and lifecycle', () => {
     sdk = installGoogleMaps();
     response = new Subject<MonitorApiResponse>();
     coordinates = new ReplaySubject<Coordinates>(1);
+    locationAvailable = new Subject<boolean>();
     media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn() };
     vi.stubGlobal('matchMedia', () => media);
     api = {
@@ -59,6 +61,7 @@ describe('Map station selection, rendering and lifecycle', () => {
       getNearbySteige: vi.fn(() => of(nearbyPlatforms)), getSecureWalkingMatrix: vi.fn(() => of({ rows: [{ elements: [] }] })),
     };
     TestBed.configureTestingModule({
+      deferBlockBehavior: DeferBlockBehavior.Manual,
       imports: [MapViewComponent],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations(),
         { provide: GoogleMapsService, useValue: { loadGoogleMapsApi: () => of(undefined) } },
@@ -66,7 +69,7 @@ describe('Map station selection, rendering and lifecycle', () => {
       ],
     }).overrideComponent(MapViewComponent, { set: {
       providers: [GoogleMapFacade, { provide: LocationService, useValue: {
-        currentLocation$: coordinates, locationAvailable$: new Subject(), retryLocationAccess: vi.fn(),
+        currentLocation$: coordinates, locationAvailable$: locationAvailable, retryLocationAccess: vi.fn(),
       } }],
     } });
     fixture = TestBed.createComponent(MapViewComponent);
@@ -90,6 +93,124 @@ describe('Map station selection, rendering and lifecycle', () => {
     media.addEventListener.mock.calls.find(call => call[0] === 'change')![1]();
     fixture.detectChanges();
   }
+
+  async function openPicker(query: string) {
+    const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
+    trigger.click(); fixture.detectChanges();
+    const [pickerBlock] = await fixture.getDeferBlocks();
+    await pickerBlock.render(DeferBlockState.Complete);
+    const picker = fixture.nativeElement.querySelector('#station-picker') as HTMLInputElement;
+    picker.value = query;
+    picker.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    return picker;
+  }
+
+  const options = () => Array.from(document.querySelectorAll<HTMLElement>('mat-option'));
+
+  it('hides the location warning after ten seconds without restarting for duplicate failures', () => {
+    locationAvailable.next(false); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Your location is unavailable');
+    vi.advanceTimersByTime(8000);
+    locationAvailable.next(false);
+    vi.advanceTimersByTime(1999); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Your location is unavailable');
+    vi.advanceTimersByTime(1); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.location-alert')).toBeNull();
+    expect(locationAvailable.observed).toBe(true);
+  });
+
+  it('clears a recovered warning immediately and gives a new failure its own ten seconds', () => {
+    locationAvailable.next(false);
+    vi.advanceTimersByTime(6000);
+    locationAvailable.next(true); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.location-alert')).toBeNull();
+    locationAvailable.next(false);
+    vi.advanceTimersByTime(4000); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Your location is unavailable');
+    vi.advanceTimersByTime(6000); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.location-alert')).toBeNull();
+  });
+
+  it('keeps the offline notice visible after the location warning expires', () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    window.dispatchEvent(new Event('offline'));
+    locationAvailable.next(false);
+    vi.advanceTimersByTime(10000); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('You are offline');
+    online.mockReturnValue(true);
+    window.dispatchEvent(new Event('online')); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.location-alert')).toBeNull();
+  });
+
+  it('cancels the pending location-warning timeout on feature teardown', () => {
+    locationAvailable.next(false); fixture.detectChanges();
+    vi.advanceTimersByTime(0);
+    expect(vi.getTimerCount()).toBe(1);
+    fixture.destroy();
+    expect(locationAvailable.observed).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('filters station names locally and explains when no stations match', async () => {
+    const picker = await openPicker('sEcOnD');
+    expect(document.activeElement).toBe(picker);
+    expect(options().map(option => option.textContent?.trim())).toEqual(['Second station']);
+    picker.value = 'unknown station'; picker.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges(); await vi.advanceTimersByTimeAsync(0); fixture.detectChanges();
+    expect(options().map(option => option.textContent?.trim())).toEqual(['No stations found']);
+    expect(options()[0].getAttribute('aria-disabled')).toBe('true');
+    expect(api.getRealTimeDepartures).not.toHaveBeenCalled();
+  });
+
+  it('explains loading and failure while the optional station chooser loads', async () => {
+    const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
+    trigger.click(); fixture.detectChanges();
+    const [pickerBlock] = await fixture.getDeferBlocks();
+    await pickerBlock.render(DeferBlockState.Loading);
+    expect(fixture.nativeElement.textContent).toContain('Loading station search');
+    await pickerBlock.render(DeferBlockState.Error);
+    expect(fixture.nativeElement.textContent).toContain('Reload to try again');
+  });
+
+  it('matches accents and German sharp s when searching station names', async () => {
+    fixture.destroy();
+    const accentedCatalog = structuredClone(catalog);
+    accentedCatalog.lines['306'].stops.features[1].properties.name = 'Währinger Straße';
+    api.getMetroLineStops.mockReturnValue(of(accentedCatalog));
+    fixture = TestBed.createComponent(MapViewComponent); fixture.detectChanges();
+    await openPicker(' WAHRINGER STRASSE ');
+    expect(options().map(option => option.textContent?.trim())).toEqual(['Währinger Straße']);
+  });
+
+  it('selects a matching station with Enter and focuses its close control', async () => {
+    const picker = await openPicker('third');
+    picker.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#station-picker')).toBeNull();
+    expect(selectedCard().textContent).toContain('Third station');
+    expect(document.activeElement).toBe(selectedCard().querySelector('.overlay-close-button'));
+  });
+
+  it('closes station search with Escape and resets its filter when reopened', async () => {
+    const picker = await openPicker('second');
+    picker.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#station-picker')).toBeNull();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Choose a station');
+    await openPicker('');
+    expect(options()).toHaveLength(4);
+  });
+
+  it('removes the search overlay when leaving the map feature', async () => {
+    await openPicker('');
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    fixture.destroy();
+    expect(document.querySelector('[role="listbox"]')).toBeNull();
+  });
 
   it('preserves hidden station defaults and explicitly enables one-finger map gestures', () => {
     expect(fixture.componentInstance.showStations()).toBe(false);
@@ -229,13 +350,12 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(highlightedStations()).toHaveLength(3);
   });
 
-  it('focuses the closest card title when chosen from the picker without adding a close button', () => {
+  it('focuses the closest card title when chosen from the picker without adding a close button', async () => {
     coordinates.next({ latitude: 48.2, longitude: 16.3, timestamp: 1000 });
-    const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
-    trigger.click(); fixture.detectChanges();
-    const picker = fixture.nativeElement.querySelector('select') as HTMLSelectElement;
-    picker.value = '1'; picker.dispatchEvent(new Event('change')); fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+    await openPicker('Tscherttegasse');
+    options()[0].click(); fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#station-picker')).toBeNull();
     expect(cards()[0].textContent).toContain('Tscherttegasse');
     expect(cards()[0].querySelector('.overlay-close-button')).toBeNull();
     expect(document.activeElement).toBe(cards()[0].querySelector('.station-name'));
@@ -340,12 +460,12 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(1);
   });
 
-  it('supports choosing a station and Escape dismissal with focus restored to its control', () => {
+  it('supports choosing a station and Escape dismissal with focus restored to its control', async () => {
     const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
-    trigger.click(); fixture.detectChanges();
-    const picker = fixture.nativeElement.querySelector('select') as HTMLSelectElement;
+    const picker = await openPicker('Second');
     expect(document.activeElement).toBe(picker);
-    picker.value = '2'; picker.dispatchEvent(new Event('change')); fixture.detectChanges();
+    options()[0].click(); fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0); fixture.detectChanges();
     expect(selectedCard().textContent).toContain('Second station');
     expect(sdk.maps[0].panTo).toHaveBeenCalledWith({ lat: 48.201, lng: 16.3 });
     expect(document.activeElement).toBe(selectedCard().querySelector('.overlay-close-button'));

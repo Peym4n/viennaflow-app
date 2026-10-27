@@ -14,6 +14,8 @@ export default defineConfig({
     ],
   },
   test: {
+    // Angular JIT inlines HTML/CSS that are absent from Vitest's TypeScript cache key.
+    fsModuleCache: false,
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.spec.ts'],

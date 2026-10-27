@@ -1,9 +1,11 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, OnInit, ViewChild, afterNextRender, computed, inject, signal } from '@angular/core';
+import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { MatOption } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { ReplaySubject, Subject, catchError, filter, finalize, forkJoin, map, of, switchMap, take, takeUntil, tap } from 'rxjs';
+import { ReplaySubject, Subject, catchError, concat, distinctUntilChanged, filter, finalize, forkJoin, map, of, switchMap, take, takeUntil, tap, timer } from 'rxjs';
 import { LatLng } from '@shared-types/api-models';
 import { GoogleMapsService } from '../../../../core/services/google-maps.service';
 import { ApiService } from '../../../../core/services/api.service';
@@ -17,25 +19,31 @@ import { MapStation, catalogStations, closestStations, stationCard } from '../..
   selector: 'app-map-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [LocationService, GoogleMapFacade],
-  imports: [MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
+  imports: [MatAutocomplete, MatAutocompleteTrigger, MatOption, MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
   templateUrl: './map-view.component.html',
   styleUrl: './map-view.component.css',
 })
 export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly isLoading = signal(true);
   readonly mapError = signal(false);
-  readonly hasLocationError = signal(false);
+  readonly showLocationWarning = signal(false);
   readonly offline = signal(typeof navigator !== 'undefined' && !navigator.onLine);
   readonly showMetroLines = signal(true);
   readonly showStations = signal(false);
   readonly showStationPicker = signal(false);
   readonly stationOptions = signal<MapStation[]>([]);
+  readonly stationQuery = signal('');
+  readonly filteredStations = computed(() => {
+    const query = stationSearchText(this.stationQuery());
+    return this.stationOptions().filter(station => stationSearchText(station.name).includes(query));
+  });
   @ViewChild('mapContainer') mapContainer!: ElementRef<HTMLElement>;
   @ViewChild('stationChoiceButton', { read: ElementRef }) private stationChoiceButton?: ElementRef<HTMLElement>;
-  @ViewChild('stationPicker') set stationPicker(element: ElementRef<HTMLSelectElement> | undefined) {
+  @ViewChild('stationPicker') set stationPicker(element: ElementRef<HTMLInputElement> | undefined) {
     element?.nativeElement.focus();
   }
   private readonly snackBar = inject(MatSnackBar);
+  private readonly injector = inject(Injector);
   private readonly mapsService = inject(GoogleMapsService);
   private readonly api = inject(ApiService);
   private readonly location = inject(LocationService);
@@ -113,15 +121,20 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   recenterMap(): void { this.rendering.recenter(); }
   toggleMetroLines(): void { this.showMetroLines.update(value => !value); this.render(); }
   toggleStations(): void { this.showStations.update(value => !value); this.render(); }
-  toggleStationPicker(): void { this.showStationPicker.update(value => !value); }
+  toggleStationPicker(): void {
+    this.stationQuery.set('');
+    this.showStationPicker.update(value => !value);
+  }
 
-  chooseStation(event: Event): void {
-    const id = Number((event.target as HTMLSelectElement).value);
+  searchStations(event: Event): void { this.stationQuery.set((event.target as HTMLInputElement).value); }
+
+  chooseStation(id: number): void {
     if (!this.stations.has(id)) return;
     this.selectionOrigin = this.stationChoiceButton?.nativeElement ?? null;
     this.showStationPicker.set(false);
     this.selectStation(id, true);
     this.rendering.showStation(id);
+    afterNextRender(() => this.rendering.focusCard(id), { injector: this.injector });
   }
 
   private selectStation(id: number, fromPicker = false): void {
@@ -134,7 +147,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.selectedId === null) this.departures.clearSelection();
     else this.departures.select(id, station.diva);
     this.render();
-    this.rendering.focusCard(id);
+    if (!fromPicker) this.rendering.focusCard(id);
   }
 
   private closeStation(id: number): void {
@@ -161,8 +174,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private trackLocation(): void {
-    this.location.locationAvailable$.pipe(takeUntil(this.destroyed$))
-      .subscribe(available => this.hasLocationError.set(!available));
+    this.location.locationAvailable$.pipe(
+      distinctUntilChanged(),
+      switchMap(available => available ? of(false) : concat(of(true), timer(10000).pipe(map(() => false)))),
+      takeUntil(this.destroyed$),
+    ).subscribe(visible => this.showLocationWarning.set(visible));
     this.location.currentLocation$.pipe(
       map(coordinates => {
         const position = { lat: coordinates.latitude, lng: coordinates.longitude };
@@ -220,4 +236,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     navigator.clipboard.writeText(text).then(() => this.snackBar.open(`Coordinates copied: ${text}`, 'Close', { duration: 2000 }))
       .catch(() => this.snackBar.open('Failed to copy coordinates.', 'Close', { duration: 3000 }));
   }
+}
+
+function stationSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('de-AT').replaceAll('ß', 'ss').trim();
 }

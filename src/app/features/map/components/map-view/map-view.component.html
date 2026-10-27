@@ -14,7 +14,7 @@
   @if (mapError()) {
     <p class="map-error" role="alert">{{ offline() ? 'You are offline. Maps and live transit data need a connection. Reload when you are online.' : 'Could not load the map. Please reload to try again.' }}</p>
   }
-  @if (hasLocationError() || offline()) {
+  @if (showLocationWarning() || offline()) {
     <div class="location-alert">
       <mat-icon class="location-alert-icon" aria-hidden="true">{{ offline() ? 'wifi_off' : 'location_disabled' }}</mat-icon>
       <span role="status">{{ offline() ? 'You are offline. Live departures and walking estimates are unavailable.' : 'Your location is unavailable. You can still choose a station.' }}</span>
@@ -42,11 +42,23 @@
   </div>
   @if (showStationPicker()) {
     <div class="station-picker" id="station-picker-panel" (keydown.escape)="toggleStationPicker(); stationChoiceButton.focus()">
-      <label for="station-picker">Choose a station</label>
-      <select #stationPicker id="station-picker" (change)="chooseStation($event)">
-        <option value="">Select a station…</option>
-        @for (station of stationOptions(); track station.id) { <option [value]="station.id">{{ station.name }}</option> }
-      </select>
+      @defer (on immediate) {
+        <label for="station-picker">Find a station</label>
+        <input #stationPicker id="station-picker" type="text" placeholder="Search stations…" autocomplete="off"
+          [value]="stationQuery()" (input)="searchStations($event)" [matAutocomplete]="stationAutocomplete">
+        <mat-autocomplete #stationAutocomplete="matAutocomplete" [autoActiveFirstOption]="true"
+          (optionSelected)="chooseStation($event.option.value)">
+          @for (station of filteredStations(); track station.id) {
+            <mat-option [value]="station.id">{{ station.name }}</mat-option>
+          } @empty {
+            <mat-option disabled>No stations found</mat-option>
+          }
+        </mat-autocomplete>
+      } @loading {
+        <span role="status">Loading station search…</span>
+      } @error {
+        <span role="alert">Station search could not be loaded. Reload to try again.</span>
+      }
     </div>
   }
 </div>

@@ -24,7 +24,11 @@ export function angularJit(): Plugin {
       // The same version-pinned transformer the Angular CLI uses handles signal inputs and DI metadata.
       program.emit(file, (name, content) => { if (name.endsWith('.js')) emitted = content; }, undefined, false,
         { before: [constructorParametersDownlevelTransform(program)] });
-      const resource = (file: string) => JSON.stringify(readFileSync(resolve(dirname(id), file), 'utf8'));
+      const resource = (file: string) => {
+        const filename = resolve(dirname(id), file);
+        this.addWatchFile(filename);
+        return JSON.stringify(readFileSync(filename, 'utf8'));
+      };
       const code = emitted
         .replace(/templateUrl:\s*['"]([^'"]+)['"]/g, (_match, file: string) => `template: ${resource(file)}`)
         .replace(/styleUrl:\s*['"]([^'"]+)['"]/g, (_match, file: string) => `styles: [${resource(file)}]`)
