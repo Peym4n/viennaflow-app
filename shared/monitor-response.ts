@@ -29,7 +29,9 @@ export function normalizeMonitorResponse(value: unknown): MonitorApiResponse {
           typeof line['towards'] !== 'string' || !Array.isArray(departures?.['departure'])) return [];
       const valid = departures['departure'].filter((departure: unknown) => {
         const time = record(record(departure)?.['departureTime']);
-        return typeof time?.['countdown'] === 'number' && Number.isFinite(time['countdown']) && time['countdown'] >= 0;
+        const validTimestamp = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value));
+        return !!time && (validTimestamp(time['timeReal']) || validTimestamp(time['timePlanned']) ||
+          (typeof time['countdown'] === 'number' && Number.isFinite(time['countdown']) && time['countdown'] >= 0));
       }).slice(0, 3);
       return [{ ...line, departures: { departure: valid } }];
     });

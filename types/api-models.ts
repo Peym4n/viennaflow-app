@@ -76,7 +76,7 @@ export interface MonitorVehicle {
 export interface MonitorDepartureTime {
   timePlanned: string;
   timeReal?: string;
-  countdown: number;
+  countdown?: number;
 }
 
 export interface MonitorDeparture {

@@ -28,14 +28,32 @@ describe('Station presentation rules', () => {
     expect(closestStations(catalogStations(catalog).values(), () => 0).map(station => station.id)).toEqual([1]);
   });
 
-  it('uses absolute departure times for two countdowns and keeps status and walking data separate', () => {
+  it('prefers real timestamps over countdowns and keeps status and walking data separate', () => {
     const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
-    monitor.lines[0].departures.departure[0].departureTime = { timePlanned: '2026-10-26T12:05:00Z', countdown: 99 };
-    monitor.lines[0].departures.departure[1].departureTime = { timePlanned: '2026-10-26T12:10:00Z', countdown: 99 };
+    monitor.lines[0].departures.departure[0].departureTime = { timeReal: '2026-10-26T12:05:00Z', timePlanned: '2026-10-26T12:20:00Z', countdown: 99 };
+    monitor.lines[0].departures.departure[1].departureTime = { timeReal: '2026-10-26T12:10:00Z', timePlanned: '2026-10-26T12:20:00Z', countdown: 99 };
     const result = stationCard(station(1), { status: 'stale', monitor }, new Map([['U6', '#ffffff']]), true, undefined, Date.parse('2026-10-26T12:02:00Z'));
     expect(result.rows[0].countdowns).toEqual([3, 8]);
     expect(result.rows[0].color).toBe('#ffffff');
     expect(result.status).toBe('stale');
     expect(result.walkingMinutes).toBeUndefined();
+  });
+
+  it.each([
+    { timeReal: '2026-10-26T12:05:59Z', countdown: 99, expected: 3 },
+    { timeReal: '2026-10-26T12:02:59Z', countdown: 99, expected: 0 },
+    { timeReal: '2026-10-26T12:01:59Z', countdown: 99, expected: 0 },
+    { timeReal: undefined, countdown: 0, expected: 0 },
+    { timeReal: undefined, countdown: 4.9, expected: 4 },
+    { timeReal: 'invalid', countdown: 4, expected: 4 },
+    { timeReal: undefined, countdown: undefined, expected: 8 },
+    { timeReal: 'invalid', countdown: NaN, expected: 8 },
+  ])('falls back through countdown and planned time: %j', ({ timeReal, countdown, expected }) => {
+    const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
+    monitor.lines[0].departures.departure = [{ departureTime: {
+      timeReal, countdown, timePlanned: '2026-10-26T12:10:59Z',
+    } }];
+    expect(stationCard(station(1), { status: 'data', monitor }, new Map(), false, undefined,
+      Date.parse('2026-10-26T12:02:00Z')).rows[0].countdowns).toEqual([expected]);
   });
 });

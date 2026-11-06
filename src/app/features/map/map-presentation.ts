@@ -55,10 +55,14 @@ export function stationCard(
   refresh: DepartureRefresh = IDLE_DEPARTURE_REFRESH,
 ): StationCard {
   const rows = (departures.monitor?.lines ?? []).flatMap(line => {
-    const countdowns = line.departures.departure.slice(0, 2).map(departure => {
-      const time = Date.parse(departure.departureTime.timeReal || departure.departureTime.timePlanned);
-      return Math.max(0, Number.isFinite(time) ? Math.ceil((time - now) / 60000) : departure.departureTime.countdown);
-    });
+    const countdowns = line.departures.departure.flatMap(({ departureTime }) => {
+      const real = Date.parse(departureTime.timeReal ?? '');
+      if (Number.isFinite(real)) return [Math.max(0, Math.floor((real - now) / 60000))];
+      const countdown = departureTime.countdown;
+      if (typeof countdown === 'number' && Number.isFinite(countdown) && countdown >= 0) return [Math.floor(countdown)];
+      const planned = Date.parse(departureTime.timePlanned);
+      return Number.isFinite(planned) ? [Math.max(0, Math.floor((planned - now) / 60000))] : [];
+    }).slice(0, 2);
     if (!countdowns.length) return [];
     const color = colors.get(line.name) || '#595959';
     return [{ key: `${line.name}:${line.towards}:${line.direction}`, line: line.name,
