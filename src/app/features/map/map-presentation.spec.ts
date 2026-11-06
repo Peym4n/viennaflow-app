@@ -34,7 +34,7 @@ describe('Station presentation rules', () => {
     monitor.lines[0].departures.departure[1].departureTime = { timePlanned: '2026-10-26T12:10:00Z', countdown: 99 };
     const result = stationCard(station(1), { status: 'stale', monitor }, new Map([['U6', '#ffffff']]), true, undefined, Date.parse('2026-10-26T12:02:00Z'));
     expect(result.rows[0].countdowns).toEqual([3, 8]);
-    expect(result.rows[0].foreground).toBe('#161616');
+    expect(result.rows[0].color).toBe('#ffffff');
     expect(result.status).toBe('stale');
     expect(result.walkingMinutes).toBeUndefined();
   });

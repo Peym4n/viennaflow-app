@@ -1,6 +1,6 @@
 import { LatLng } from '@shared-types/api-models';
 import { LineStopsResponse } from '../../core/services/api.service';
-import { StationDepartures } from './station-departures';
+import { DepartureRefresh, IDLE_DEPARTURE_REFRESH, StationDepartures } from './station-departures';
 
 export interface MapStation {
   id: number;
@@ -16,7 +16,6 @@ export interface DepartureRow {
   line: string;
   towards: string;
   color: string;
-  foreground: string;
   countdowns: number[];
 }
 
@@ -26,6 +25,7 @@ export interface StationCard {
   walkingMinutes?: number;
   status: StationDepartures['status'];
   rows: DepartureRow[];
+  refresh: DepartureRefresh;
 }
 
 export function catalogStations(catalog: LineStopsResponse): Map<number, MapStation> {
@@ -52,6 +52,7 @@ export function closestStations(stations: Iterable<MapStation>, distance: (posit
 export function stationCard(
   station: MapStation, departures: StationDepartures, colors: ReadonlyMap<string, string>,
   selected: boolean, walkingMinutes?: number, now = Date.now(),
+  refresh: DepartureRefresh = IDLE_DEPARTURE_REFRESH,
 ): StationCard {
   const rows = (departures.monitor?.lines ?? []).flatMap(line => {
     const countdowns = line.departures.departure.slice(0, 2).map(departure => {
@@ -61,15 +62,7 @@ export function stationCard(
     if (!countdowns.length) return [];
     const color = colors.get(line.name) || '#595959';
     return [{ key: `${line.name}:${line.towards}:${line.direction}`, line: line.name,
-      towards: line.towards, color, foreground: badgeForeground(color), countdowns }];
+      towards: line.towards, color, countdowns }];
   });
-  return { station, selected, walkingMinutes, status: departures.status, rows };
-}
-
-function badgeForeground(color: string): string {
-  if (!/^#[\da-f]{6}$/i.test(color)) return '#ffffff';
-  const rgb = [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16) / 255)
-    .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
-  const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
-  return luminance > 0.179 ? '#161616' : '#ffffff';
+  return { station, selected, walkingMinutes, status: departures.status, rows, refresh };
 }

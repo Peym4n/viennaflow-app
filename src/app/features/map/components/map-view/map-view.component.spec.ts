@@ -587,6 +587,72 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['mouse', 'touch'] as const)('clears keyboard outlines on %s interaction while retaining card focus', origin => {
+    select('Tscherttegasse');
+    const card = selectedCard();
+    const close = card.querySelector<HTMLButtonElement>('.overlay-close-button')!;
+    close.blur();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
+    close.focus(); fixture.detectChanges();
+    expect(card.querySelector('.custom-map-overlay')?.classList.contains('keyboard-focus')).toBe(true);
+    document.dispatchEvent(origin === 'mouse'
+      ? new MouseEvent('mousedown', { detail: 1, buttons: 1, bubbles: true })
+      : new Event('touchstart', { bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(close);
+    expect(card.querySelector('.custom-map-overlay')?.classList.contains('keyboard-focus')).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
+    const title = card.querySelector<HTMLButtonElement>('.station-name')!;
+    title.focus(); fixture.detectChanges();
+    expect(card.querySelector('.custom-map-overlay')?.classList.contains('keyboard-focus')).toBe(true);
+  });
+
+  it('retains search autofocus but removes its keyboard outline after a pointer press', async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    const picker = await openPicker('second');
+    expect(document.activeElement).toBe(picker);
+    expect(picker.classList.contains('keyboard-focus')).toBe(true);
+    picker.dispatchEvent(new MouseEvent('mousedown', { detail: 1, buttons: 1, bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(picker);
+    expect(picker.classList.contains('keyboard-focus')).toBe(false);
+  });
+
+  it('drains the refresh divider between requests and animates later refreshes without hiding cached departures', () => {
+    const first = new Subject<MonitorApiResponse>();
+    const second = new Subject<MonitorApiResponse>();
+    api.getRealTimeDepartures.mockReturnValueOnce(first).mockReturnValue(second);
+    select('Tscherttegasse');
+    const card = selectedCard();
+    const close = card.querySelector<HTMLButtonElement>('.overlay-close-button')!;
+    close.focus();
+    expect(card.querySelector('.loading-line.loading')).not.toBeNull();
+    vi.advanceTimersByTime(2000);
+    first.next({ ...monitorSample, timestamp: Date.now() }); first.complete();
+    const countdown = card.querySelector<HTMLElement>('.refresh-countdown')!;
+    expect(countdown.style.animationDuration).toBe('15000ms');
+    expect(countdown.style.animationDelay).toBe('-2000ms');
+    expect(card.querySelector('.loading-line.loading')).toBeNull();
+    expect(card.querySelector('.departures')?.getAttribute('aria-busy')).toBe('false');
+    vi.advanceTimersByTime(5000);
+    resize(true); resize(false);
+    expect(card.querySelector('.refresh-countdown')).toBe(countdown);
+    expect(countdown.style.animationDelay).toBe('-2000ms');
+    vi.advanceTimersByTime(8000);
+    expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(2);
+    expect(card.querySelector('.loading-line.loading')).not.toBeNull();
+    expect(card.querySelector('.refresh-countdown')).toBeNull();
+    expect(card.querySelector('.departures')?.getAttribute('aria-busy')).toBe('true');
+    expect(card.textContent).toContain('Floridsdorf');
+    expect(document.activeElement).toBe(close);
+    vi.advanceTimersByTime(3000);
+    second.next({ ...monitorSample, timestamp: Date.now() }); second.complete();
+    const nextCountdown = card.querySelector<HTMLElement>('.refresh-countdown')!;
+    expect(nextCountdown).not.toBe(countdown);
+    expect(nextCountdown.style.animationDelay).toBe('-3000ms');
+    expect(card.querySelector('.loading-line.loading')).toBeNull();
+  });
+
   it('supports choosing a station and Escape dismissal with focus restored to its control', async () => {
     const trigger = fixture.nativeElement.querySelector('button[aria-label="Choose a station"]') as HTMLButtonElement;
     const picker = await openPicker('Second');

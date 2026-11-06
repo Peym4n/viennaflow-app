@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subject, Subscription, catchError, exhaustMap, of, switchMap, timer } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription, catchError, defer, exhaustMap, finalize, of, switchMap, tap, timer } from 'rxjs';
 import { Monitor, MonitorApiResponse } from '@shared-types/api-models';
 
 export type DepartureStatus = 'loading' | 'data' | 'empty' | 'stale' | 'error';
@@ -7,6 +7,17 @@ export interface StationDepartures {
   monitor?: Monitor;
   updatedAt?: number;
 }
+
+export interface DepartureRefresh {
+  readonly inFlight: boolean;
+  readonly nextRequestAt: number | null;
+  readonly intervalMs: number;
+}
+
+const REFRESH_INTERVAL_MS = 15000;
+export const IDLE_DEPARTURE_REFRESH: DepartureRefresh = {
+  inFlight: false, nextRequestAt: null, intervalMs: REFRESH_INTERVAL_MS,
+};
 
 /** Owns departure freshness, membership and one cancellable polling stream. */
 export class StationDepartureState {
@@ -19,17 +30,30 @@ export class StationDepartureState {
   private readonly subscription: Subscription;
   private active = true;
   private key = '';
+  private refreshState = IDLE_DEPARTURE_REFRESH;
+
+  get refresh(): DepartureRefresh { return this.refreshState; }
 
   constructor(fetch: (divas: string[]) => Observable<MonitorApiResponse>) {
     this.subscription = this.requests.pipe(
-      switchMap(divas => divas.length === 0 ? of(null) : timer(0, 15000).pipe(
-        exhaustMap(() => fetch(divas).pipe(
-          catchError(() => of({ data: null, message: 'Departure request failed', errorOccurred: true }))
-        )),
-        switchMap(response => {
-          this.accept(divas, response);
-          return of(null);
+      switchMap(divas => divas.length === 0 ? of(null) : timer(0, REFRESH_INTERVAL_MS).pipe(
+        // Include skipped ticks so a slow request still reports the actual next polling opportunity.
+        tap(() => {
+          this.refreshState = { ...this.refreshState, nextRequestAt: Date.now() + REFRESH_INTERVAL_MS };
         }),
+        exhaustMap(() => defer(() => {
+          this.refreshState = { ...this.refreshState, inFlight: true };
+          this.changed.next();
+          return fetch(divas);
+        }).pipe(
+          catchError(() => of({ data: null, message: 'Departure request failed', errorOccurred: true })),
+          tap(response => this.accept(divas, response)),
+          finalize(() => {
+            if (!this.refreshState.inFlight) return;
+            this.refreshState = { ...this.refreshState, inFlight: false };
+            this.changed.next();
+          }),
+        )),
       )),
     ).subscribe();
   }
@@ -71,6 +95,7 @@ export class StationDepartureState {
   }
 
   destroy(): void {
+    this.refreshState = IDLE_DEPARTURE_REFRESH;
     this.subscription.unsubscribe();
     this.requests.complete();
     this.changed.complete();
@@ -81,8 +106,10 @@ export class StationDepartureState {
     const key = divas.join(',');
     if (key === this.key) return;
     this.key = key;
+    this.refreshState = IDLE_DEPARTURE_REFRESH;
     // switchMap cancels both the old timer and its in-flight HTTP request.
     this.requests.next(divas);
+    this.changed.next();
   }
 
   private accept(divas: string[], response: MonitorApiResponse): void {

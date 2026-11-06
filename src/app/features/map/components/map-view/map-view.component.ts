@@ -11,6 +11,7 @@ import { GoogleMapsService } from '../../../../core/services/google-maps.service
 import { ApiService } from '../../../../core/services/api.service';
 import { LocationService } from '../../../../core/services/location.service';
 import { AutofocusDirective } from '../../../../shared/directives/autofocus.directive';
+import { FocusVisibilityDirective } from '../../../../shared/directives/focus-visibility.directive';
 import { StationDepartureState } from '../../station-departures';
 import { WalkingTimes } from '../../walking-times';
 import { GoogleMapFacade } from '../../google-map-facade';
@@ -21,7 +22,7 @@ import { MapStation, catalogStations, closestStations, stationCard } from '../..
   selector: 'app-map-view',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [LocationService, GoogleMapFacade],
-  imports: [AutofocusDirective, MatAutocomplete, MatAutocompleteTrigger, MatOption, MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
+  imports: [AutofocusDirective, FocusVisibilityDirective, MatAutocomplete, MatAutocompleteTrigger, MatOption, MatProgressSpinnerModule, MatButtonModule, MatIconModule, MatSnackBarModule],
   templateUrl: './map-view.component.html',
   styleUrl: './map-view.component.css',
 })
@@ -172,7 +173,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
     const makeCard = (station: MapStation) => {
       const state = this.departures.get(station.diva);
       return stationCard(station, this.offline() && state.monitor ? { ...state, status: 'stale' } : state,
-        this.colors, station.id === this.selectedId, this.walkingTimes.get(station.id));
+        this.colors, station.id === this.selectedId, this.walkingTimes.get(station.id), Date.now(), this.departures.refresh);
     };
     const visibleId = this.selectedId ?? this.nearby.keys().next().value;
     const visible = visibleId === undefined ? undefined : this.stations.get(visibleId);

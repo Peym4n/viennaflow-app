@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { StationCard } from '../../map-presentation';
+import { FocusVisibilityDirective } from '../../../../shared/directives/focus-visibility.directive';
 
 @Component({
   selector: 'app-station-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FocusVisibilityDirective],
   host: { '(keydown.escape)': 'dismiss($event)' },
   template: `
-    <section class="custom-map-overlay" [class.selected]="card().selected"
+    <section appFocusVisibility class="custom-map-overlay" [class.selected]="card().selected"
       role="region" [attr.aria-labelledby]="'station-title-' + card().station.id">
       <header>
         <h2 [id]="'station-title-' + card().station.id">
@@ -26,13 +28,20 @@ import { StationCard } from '../../map-presentation';
           </button>
         }
       </header>
-      <div class="loading-line" [class.loading]="card().status === 'loading'" aria-hidden="true"></div>
-      <div class="departures" [attr.aria-busy]="card().status === 'loading'">
+      <div class="loading-line" [class.loading]="refresh().inFlight" aria-hidden="true">
+        @for (progress of countdown(); track progress.nextRequestAt) {
+          <span class="refresh-countdown" [style.animation-duration.ms]="progress.intervalMs"
+            [style.animation-delay.ms]="progress.delayMs"></span>
+        }
+      </div>
+      <div class="departures" [attr.aria-busy]="refresh().inFlight || card().status === 'loading'">
         @for (row of card().rows; track row.key) {
           <div class="departure-line">
-            <span class="line-badge" [style.background-color]="row.color" [style.color]="row.foreground">{{ row.line }}</span>
-            <span class="material-icons direction-arrow" aria-hidden="true">chevron_right</span>
-            <span class="direction">{{ row.towards }}</span>
+            <span class="line-direction">
+              <span class="line-badge" [style.background-color]="row.color">{{ row.line }}</span>
+              <span class="material-icons direction-arrow" aria-hidden="true">chevron_right</span>
+              <span class="direction">{{ row.towards }}</span>
+            </span>
             <span class="countdowns">
               @for (countdown of row.countdowns; track $index) {
                 @if (!$first) { <span class="separator" aria-hidden="true">|</span> }
@@ -55,16 +64,19 @@ import { StationCard } from '../../map-presentation';
     header { display: flex; align-items: center; gap: 4px; }
     h2 { flex: 1; min-width: 0; margin: 0; font: inherit; }
     button { color: inherit; background: none; border: 0; border-radius: 4px; font: inherit; cursor: pointer; min-height: 32px; }
-    button:focus-visible { outline: 3px solid #185abc; outline-offset: -2px; }
+    button:focus { outline: none; }
+    .keyboard-focus button:focus { outline: 3px solid #185abc; outline-offset: -2px; }
     .station-name { text-align: left; padding: 2px 4px; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; width: 100%; }
     .overlay-close-button { display: grid; place-items: center; min-width: 32px; flex-shrink: 0; padding: 0; }
     .walking-time { display: flex; align-items: center; white-space: nowrap; color: #444; }
     .walking-time .material-icons { font-size: 19px; }
     .loading-line { height: 2px; background: #e0e0e0; margin: 2px 0 4px; overflow: hidden; }
+    .refresh-countdown { display: block; height: 100%; background: #185abc; transform-origin: right; animation: refresh-countdown linear forwards; }
     .loading { background: linear-gradient(90deg, #e0e0e0, #185abc, #e0e0e0); background-size: 200% 100%; animation: loading-sweep 1.5s linear infinite; }
     .departure-line { display: flex; align-items: center; gap: 3px; margin: 4px 0; }
-    .line-badge { border-radius: 12px; min-width: 22px; padding: 1px 4px; font-weight: 700; text-align: center; }
-    .direction-arrow { font-size: 16px; color: #595959; }
+    .line-direction { display: flex; align-items: center; gap: 0; flex: 1; min-width: 0; }
+    .line-badge { flex-shrink: 0; border-radius: 12px; min-width: 22px; padding: 1px 4px; font-weight: 700; text-align: center; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
+    .direction-arrow { flex-shrink: 0; font-size: 16px; color: #595959; }
     .direction { flex: 1; min-width: 0; margin-inline-end: 8px; overflow-wrap: anywhere; font-weight: 700; font-size: 12px; }
     .countdowns { display: flex; align-items: center; gap: 5px; flex-shrink: 0; font-weight: 700; }
     .countdown { color: #005eb8; }
@@ -74,13 +86,25 @@ import { StationCard } from '../../map-presentation';
     .status:empty { display: none; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     @keyframes loading-sweep { to { background-position: -200% 0; } }
-    @media (prefers-reduced-motion: reduce) { .loading { animation: none; } }
+    @keyframes refresh-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .loading { animation: none; }
+      .refresh-countdown { animation-timing-function: steps(15, end); }
+    }
   `,
 })
 export class StationCardComponent {
   readonly card = input.required<StationCard>();
   readonly close = output<void>();
   readonly select = output<void>();
+  readonly refresh = computed(() => this.card().refresh);
+  readonly countdown = computed(() => {
+    const { inFlight, nextRequestAt, intervalMs } = this.refresh();
+    if (inFlight || nextRequestAt === null) return [];
+    // This computed value only changes with the polling schedule, not walking/card updates.
+    return [{ nextRequestAt, intervalMs,
+      delayMs: Math.max(-intervalMs, Math.min(0, nextRequestAt - Date.now() - intervalMs)) }];
+  });
   readonly statusMessage = computed(() => {
     const { status, rows } = this.card();
     switch (status) {
