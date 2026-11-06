@@ -11,10 +11,7 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
     <section appFocusVisibility class="custom-map-overlay" [class.selected]="card().selected"
       role="region" [attr.aria-labelledby]="'station-title-' + card().station.id">
       <header>
-        <h2 [id]="'station-title-' + card().station.id">
-          <button class="station-name" type="button" (click)="select.emit()"
-            [attr.aria-label]="'Show details for ' + card().station.name">{{ card().station.name }}</button>
-        </h2>
+        <h2 class="station-name" tabindex="-1" [id]="'station-title-' + card().station.id">{{ card().station.name }}</h2>
         @if (card().walkingMinutes !== undefined) {
           <span class="walking-time">
             <span class="material-icons" aria-hidden="true">directions_walk</span>
@@ -64,9 +61,9 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
     header { display: flex; align-items: center; gap: 4px; }
     h2 { flex: 1; min-width: 0; margin: 0; font: inherit; }
     button { color: inherit; background: none; border: 0; border-radius: 4px; font: inherit; cursor: pointer; min-height: 32px; }
-    button:focus { outline: none; }
-    .keyboard-focus button:focus { outline: 3px solid #185abc; outline-offset: -2px; }
-    .station-name { text-align: left; padding: 2px 4px; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; width: 100%; }
+    button:focus, .station-name:focus { outline: none; }
+    .keyboard-focus button:focus, .keyboard-focus .station-name:focus { outline: 3px solid #185abc; outline-offset: -2px; }
+    .station-name { display: flex; align-items: center; box-sizing: border-box; min-height: 32px; text-align: left; padding: 2px 4px; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; width: 100%; }
     .overlay-close-button { display: grid; place-items: center; min-width: 32px; flex-shrink: 0; padding: 0; }
     .walking-time { display: flex; align-items: center; white-space: nowrap; color: #444; }
     .walking-time .material-icons { font-size: 19px; }
@@ -96,7 +93,6 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
 export class StationCardComponent {
   readonly card = input.required<StationCard>();
   readonly close = output<void>();
-  readonly select = output<void>();
   readonly refresh = computed(() => this.card().refresh);
   readonly countdown = computed(() => {
     const { inFlight, nextRequestAt, intervalMs } = this.refresh();

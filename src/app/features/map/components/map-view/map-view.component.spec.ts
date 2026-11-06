@@ -452,6 +452,9 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(cards()).toEqual([card]);
     expect(card.querySelector('.overlay-close-button')).toBeNull();
     expect(document.activeElement).toBe(card.querySelector('.station-name'));
+    expect(card.querySelector('.station-name')?.tagName).toBe('H2');
+    expect(card.querySelector('.station-name')?.getAttribute('tabindex')).toBe('-1');
+    expect(card.querySelector('button')).toBeNull();
     resize(true);
     select('Tscherttegasse');
     expect(cards()).toEqual([card]);
@@ -602,7 +605,7 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(document.activeElement).toBe(close);
     expect(card.querySelector('.custom-map-overlay')?.classList.contains('keyboard-focus')).toBe(false);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
-    const title = card.querySelector<HTMLButtonElement>('.station-name')!;
+    const title = card.querySelector<HTMLHeadingElement>('.station-name')!;
     title.focus(); fixture.detectChanges();
     expect(card.querySelector('.custom-map-overlay')?.classList.contains('keyboard-focus')).toBe(true);
   });

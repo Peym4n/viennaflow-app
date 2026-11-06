@@ -121,7 +121,6 @@ export class GoogleMapFacade {
       if (!card) {
         const component = createComponent(StationCardComponent, { environmentInjector: this.injector });
         component.setInput('card', data);
-        component.instance.select.subscribe(() => this.zone.run(() => this.actions.selectStation(data.station.id)));
         component.instance.close.subscribe(() => this.zone.run(() => this.actions.closeStation(data.station.id)));
         this.app.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
@@ -140,7 +139,7 @@ export class GoogleMapFacade {
   focusCard(id: number): void {
     const element = this.cards.get(id)?.component.location.nativeElement as HTMLElement | undefined;
     const target = element?.querySelector<HTMLButtonElement>('.overlay-close-button')
-      ?? element?.querySelector<HTMLButtonElement>('.station-name');
+      ?? element?.querySelector<HTMLHeadingElement>('.station-name');
     target?.focus({ preventScroll: true });
   }
 
