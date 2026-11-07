@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Monitor, MonitorApiResponse, StationMonitorStatus } from '../types/api-models.js';
+import { DEPARTURE_MAX_AGE_MS, DEPARTURE_MIN_RETRY_MS, DEPARTURE_REFRESH_MS } from '../shared/departure-timing.js';
 
-export const PROVIDER_INTERVAL_MS = 15000;
-export const MAX_STALE_MS = 120000;
+export const PROVIDER_INTERVAL_MS = DEPARTURE_REFRESH_MS;
+export const MAX_STALE_MS = DEPARTURE_MAX_AGE_MS;
 export const MAX_BATCH = 20;
 export interface CachedStation { monitor: Monitor | null; fetchedAt: number; }
 export interface DepartureCache {
@@ -26,7 +27,7 @@ export class DepartureCoordinator {
     const entries = new Map<string, CachedStation>();
     let pending = new Set(ids);
     let failed = false;
-    let retryAfterMs = PROVIDER_INTERVAL_MS;
+    let retryAt = this.now() + PROVIDER_INTERVAL_MS;
     try {
       const cached = await this.cache.read(ids);
       cached.forEach((entry, index) => {
@@ -37,7 +38,7 @@ export class DepartureCoordinator {
         await this.cache.enqueue([...pending], this.now());
         const token = randomUUID();
         const lease = await this.cache.claim(token, this.now());
-        retryAfterMs = lease.retryAfterMs;
+        retryAt = this.now() + (lease.acquired ? PROVIDER_INTERVAL_MS : lease.retryAfterMs);
         if (lease.acquired) {
           try {
             const queued = await this.cache.pending(MAX_BATCH);
@@ -68,18 +69,23 @@ export class DepartureCoordinator {
 
     const stations: Record<string, StationMonitorStatus> = {};
     const monitors: Monitor[] = [];
+    const now = this.now();
+    const retryAfterMs = Math.max(retryAt - now, DEPARTURE_MIN_RETRY_MS);
     for (const id of ids) {
       const entry = entries.get(id);
       if (entry?.monitor) monitors.push(entry.monitor);
       stations[id] = {
         status: pending.has(id) ? (entry ? 'stale' : failed ? 'error' : 'pending') : entry?.monitor ? 'data' : 'empty',
         updatedAt: entry?.fetchedAt,
-        ...(pending.has(id) ? { retryAfterMs: Math.max(retryAfterMs, 1000) } : {}),
+        ageMs: entry ? Math.max(0, now - entry.fetchedAt) : undefined,
+        ...(pending.has(id) ? { retryAfterMs } : {}),
       };
     }
     return {
-      data: { monitors }, stations, timestamp: this.now(),
-      errorOccurred: failed && !entries.size,
+      data: { monitors }, stations, timestamp: now,
+      nextPollInMs: pending.size ? retryAfterMs : Math.max(DEPARTURE_MIN_RETRY_MS,
+        Math.min(PROVIDER_INTERVAL_MS, ...[...entries.values()].map(entry => PROVIDER_INTERVAL_MS - (now - entry.fetchedAt)))),
+      errorOccurred: failed,
       message: { value: failed ? 'Departure delivery is temporarily unavailable' : 'Departures', messageCode: 1, serverTime: new Date(this.now()).toISOString() },
     };
   }

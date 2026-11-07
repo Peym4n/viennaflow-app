@@ -6,6 +6,7 @@ import { NearbySteig, WalkingPayload, WalkingMatrix } from '@shared-types/api-mo
 import { MonitorApiResponse } from '@shared-types/api-models';
 export type { MonitorApiResponse } from '@shared-types/api-models';
 import { normalizeDiva, normalizeMonitorResponse } from './monitor-response';
+import { DEPARTURE_REFRESH_MS, departureDelay } from '../../../../shared/departure-timing';
 import { SessionService } from './session.service'; // Import SessionService
 import { normalizeTransitCatalog } from '../../../../shared/transit-catalog';
 import type { LineStopsResponse } from '@shared-types/api-models';
@@ -76,7 +77,23 @@ export class ApiService {
     if (!normalizedDivaIds.length) return of({ data: { monitors: [] }, message: 'No stations requested', timestamp: Date.now() });
     return this.http.post<unknown>('/api/routes/monitor', { divaIds: normalizedDivaIds }).pipe(
       map(normalizeMonitorResponse),
-      catchError(() => of({ data: null, message: 'Unable to load departures', errorOccurred: true, timestamp: Date.now() }))
+      catchError((error: unknown) => {
+        let headerDelay: number | undefined;
+        if (error instanceof HttpErrorResponse) {
+          const retry = error.headers.get('Retry-After');
+          if (retry?.trim()) {
+            const seconds = Number(retry);
+            headerDelay = departureDelay(Number.isFinite(seconds) ? seconds * 1000 : Math.max(0, Date.parse(retry) - Date.now()));
+          }
+          try {
+            const response = normalizeMonitorResponse(error.error);
+            return of({ ...response, errorOccurred: true,
+              nextPollInMs: Math.max(response.nextPollInMs ?? 0, headerDelay ?? 0) || DEPARTURE_REFRESH_MS });
+          } catch { /* An unstructured failure still gets a bounded retry delay. */ }
+        }
+        return of({ data: null, message: 'Unable to load departures', errorOccurred: true,
+          nextPollInMs: headerDelay ?? DEPARTURE_REFRESH_MS });
+      })
     );
   }
 

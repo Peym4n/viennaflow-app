@@ -10,6 +10,7 @@ const LAST = PREFIX + 'last-provider-request';
 const CLAIM = `
 local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
+if redis.call('EXISTS', KEYS[1]) == 1 then return {0, 1000} end
 local last = tonumber(redis.call('GET', KEYS[2]) or '0')
 local remaining = tonumber(ARGV[2]) - (now - last)
 if remaining > 0 then return {0, remaining} end
@@ -84,9 +85,9 @@ export class MemoryDepartureCache implements DepartureCache {
   async enqueue(ids: string[], now: number) { for (const id of ids) if (!this.queue.has(id)) this.queue.set(id, now); }
   async pending(limit: number) { return [...this.queue].sort((a, b) => a[1] - b[1]).slice(0, limit).map(([id]) => id); }
   async claim(token: string, now: number) {
+    if (this.lease && this.lease.expiresAt > now) return { acquired: false, retryAfterMs: 1000 };
     const remaining = PROVIDER_INTERVAL_MS - (now - this.lastRequest);
     if (remaining > 0) return { acquired: false, retryAfterMs: remaining };
-    if (this.lease && this.lease.expiresAt > now) return { acquired: false, retryAfterMs: 1000 };
     this.lease = { token, expiresAt: now + 12000 };
     this.lastRequest = now;
     return { acquired: true, retryAfterMs: 0 };

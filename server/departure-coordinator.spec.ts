@@ -21,11 +21,92 @@ describe('departure coordination', () => {
     expect(waiting.stations![diva].status).toBe('pending');
     complete(monitors);
     const loaded = await firstRequest;
-    expect(loaded.stations![diva]).toEqual({ status: 'data', updatedAt: now });
+    expect(loaded.stations![diva]).toEqual({ status: 'data', updatedAt: now, ageMs: 0 });
     now += 10000;
     const cached = await second.deliver([diva]);
     expect(cached.stations![diva].updatedAt).toBe(100000);
+    expect(cached.stations![diva].ageMs).toBe(10000);
+    expect(cached.nextPollInMs).toBe(5000);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the remaining cooldown for a station selected five seconds after another', async () => {
+    let now = 100000;
+    const cache = new MemoryDepartureCache(() => now);
+    const fetch = vi.fn(async (_ids: string[]) => monitors);
+    const coordinator = new DepartureCoordinator(cache, fetch, () => now);
+    await coordinator.deliver([diva]);
+    now += 5000;
+    const pending = await coordinator.deliver(['60200002']);
+    expect(pending.nextPollInMs).toBe(10000);
+    expect(pending.stations!['60200002']).toMatchObject({ status: 'pending', retryAfterMs: 10000 });
+    now += pending.nextPollInMs!;
+    await coordinator.deliver(['60200002']);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('guides a cached response to its expiry instead of skipping an entire polling cycle', async () => {
+    let now = 100000;
+    const cache = new MemoryDepartureCache(() => now);
+    const fetch = vi.fn(async () => { now += 1000; return monitors; });
+    const coordinator = new DepartureCoordinator(cache, fetch, () => now);
+    const first = await coordinator.deliver([diva]);
+    expect(first.nextPollInMs).toBe(15000);
+    now = 115000;
+    const cached = await coordinator.deliver([diva]);
+    expect(cached.nextPollInMs).toBe(1000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    now += cached.nextPollInMs!;
+    await coordinator.deliver([diva]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets concurrent callers recheck the cache while an owned provider request is running', async () => {
+    let now = 100000;
+    const cache = new MemoryDepartureCache(() => now);
+    let complete!: (value: typeof monitors) => void;
+    const fetch = vi.fn(() => new Promise<typeof monitors>(resolve => { complete = resolve; }));
+    const coordinator = new DepartureCoordinator(cache, fetch, () => now);
+    const first = coordinator.deliver([diva]);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const pending = await coordinator.deliver([diva]);
+    expect(pending.nextPollInMs).toBe(1000);
+    now += 500;
+    complete(monitors); await first;
+    now += 500;
+    const cached = await coordinator.deliver([diva]);
+    expect(cached.stations![diva].status).toBe('data');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms queued stations in another caller\'s batch without returning unrequested data', async () => {
+    let now = 100000;
+    const cache = new MemoryDepartureCache(() => now);
+    const fetch = vi.fn(async (_ids: string[]) => monitors);
+    const coordinator = new DepartureCoordinator(cache, fetch, () => now);
+    await coordinator.deliver([diva]);
+    now += 5000;
+    await coordinator.deliver(['60200002']);
+    now += 10000;
+    const foreground = await coordinator.deliver([diva]);
+    expect(fetch.mock.calls.at(-1)![0]).toEqual([diva, '60200002']);
+    expect(Object.keys(foreground.stations!)).toEqual([diva]);
+    expect((await coordinator.deliver(['60200002'])).stations!['60200002'].status).toBe('empty');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains the cooldown after a provider failure and marks stale snapshots as failed refreshes', async () => {
+    let now = 100000;
+    const cache = new MemoryDepartureCache(() => now);
+    const fetch = vi.fn().mockResolvedValueOnce(monitors).mockImplementation(async () => { now += 2000; throw new Error('failed'); });
+    const coordinator = new DepartureCoordinator(cache, fetch, () => now);
+    await coordinator.deliver([diva]);
+    now += 15000;
+    const failure = await coordinator.deliver([diva]);
+    expect(failure.errorOccurred).toBe(true);
+    expect(failure.stations![diva].status).toBe('stale');
+    expect(failure.nextPollInMs).toBe(13000);
+    expect(failure.stations![diva].retryAfterMs).toBe(13000);
   });
 
   it('returns only requested stations, batches pending IDs without scores, and caches valid empty data', async () => {

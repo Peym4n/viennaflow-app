@@ -61,6 +61,55 @@ describe('Station presentation rules', () => {
     expect(card.rows[0].countdowns[0].status).toBe(status);
   });
 
+  it('anchors a countdown to its original snapshot so remaining minutes age without changing punctuality', () => {
+    const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
+    const sampledAt = Date.parse('2026-10-26T12:00:00Z');
+    monitor.lines[0].departures.departure = [{ departureTime: {
+      countdown: 3, timePlanned: '2026-10-26T12:02:00Z',
+    } }];
+    const departures = { status: 'data' as const, monitor, updatedAt: sampledAt, sampledAt };
+    const first = stationCard(station(1), departures, new Map(), false, undefined, sampledAt);
+    const later = stationCard(station(1), departures, new Map(), false, undefined, sampledAt + 75000);
+    expect(first.rows[0].countdowns[0]).toEqual({ minutes: 3, status: 'on-time' });
+    expect(later.rows[0].countdowns[0]).toEqual({ minutes: 1, status: 'on-time' });
+  });
+
+  it('keeps countdown aging and punctuality accurate when the browser clock differs from the server', () => {
+    const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
+    const sampledAt = Date.parse('2026-10-26T12:00:00Z');
+    const receivedAt = sampledAt + 600000;
+    monitor.lines[0].departures.departure = [{ departureTime: {
+      countdown: 3, timePlanned: '2026-10-26T12:02:00Z',
+    } }];
+    const card = stationCard(station(1), { status: 'data', monitor, sampledAt, updatedAt: receivedAt }, new Map(), false,
+      undefined, receivedAt + 60000);
+    expect(card.rows[0].countdowns[0]).toEqual({ minutes: 2, status: 'on-time' });
+  });
+
+  it('omits expired snapshots and obsolete departures instead of keeping them at Now', () => {
+    const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
+    const sampledAt = Date.parse('2026-10-26T12:00:00Z');
+    monitor.lines = [monitor.lines[0]];
+    monitor.lines[0].departures.departure = [{ departureTime: {
+      timeReal: '2026-10-26T11:58:59Z', timePlanned: '2026-10-26T12:00:00Z',
+    } }];
+    expect(stationCard(station(1), { status: 'stale', monitor, updatedAt: sampledAt }, new Map(), false,
+      undefined, sampledAt).rows).toEqual([]);
+    monitor.lines[0].departures.departure = [{ departureTime: { countdown: 10, timePlanned: '2026-10-26T12:10:00Z' } }];
+    expect(stationCard(station(1), { status: 'stale', monitor, updatedAt: sampledAt }, new Map(), false,
+      undefined, sampledAt + 120000).rows).toEqual([]);
+  });
+
+  it('ignores malformed optional timestamps instead of coercing them into real-time predictions', () => {
+    const raw = structuredClone(fixture);
+    Object.assign(raw.data.monitors[0].lines[0].departures, { departure: [{ departureTime: {
+      timeReal: 2026, timePlanned: null, countdown: 3,
+    } }] });
+    const monitor = normalizeMonitorResponse(raw).data!.monitors[0];
+    const card = stationCard(station(1), { status: 'data', monitor }, new Map(), false);
+    expect(card.rows[0].countdowns[0]).toEqual({ minutes: 3, status: 'scheduled' });
+  });
+
   it.each([
     { timeReal: '2026-10-26T12:05:59Z', countdown: 99, expected: 3 },
     { timeReal: '2026-10-26T12:02:59Z', countdown: 99, expected: 0 },

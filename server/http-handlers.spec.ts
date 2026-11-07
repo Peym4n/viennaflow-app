@@ -5,7 +5,8 @@ import walking from '../api/routes/walking-matrix.js';
 import session from '../api/session/init.js';
 import monitor from '../api/routes/monitor.js';
 
-const mocks = vi.hoisted(() => ({ mget: vi.fn(), get: vi.fn(), set: vi.fn(), ttl: vi.fn(), usage: vi.fn(), fetch: vi.fn(), departures: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mget: vi.fn(), get: vi.fn(), set: vi.fn(), ttl: vi.fn(), usage: vi.fn(), fetch: vi.fn(), departures: vi.fn(),
+  eval: vi.fn(), pipeline: vi.fn() }));
 vi.mock('./redis.js', () => ({ getRedis: () => mocks }));
 vi.mock('@dotenvx/dotenvx', () => ({ get: () => 'test-only' }));
 vi.mock('./walking-limits.js', () => ({ reserveWalkingUsage: mocks.usage }));
@@ -105,6 +106,20 @@ describe('walking HTTP contracts', () => {
     const result = await invoke(monitor, { method: 'POST', body: { divaIds: ['60201394'] } });
     expect(result.status).toBe(503);
     expect(result.headers.get('Retry-After')).toBe('15');
+    expect(mocks.departures).not.toHaveBeenCalled();
+  });
+
+  it('matches Retry-After to the coordinator delay instead of always returning fifteen seconds', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(100000);
+    mocks.mget.mockResolvedValue([null]);
+    const pipeline = { zadd: vi.fn(), expire: vi.fn(), exec: vi.fn(async () => []) };
+    mocks.pipeline.mockReturnValue(pipeline);
+    mocks.eval.mockResolvedValue([0, 8500]);
+    const result = await invoke(monitor, { method: 'POST', body: { divaIds: ['60201394'] } });
+    expect(result.status).toBe(200);
+    expect(result.headers.get('Retry-After')).toBe('9');
+    expect(result.body).toMatchObject({ nextPollInMs: 8500,
+      stations: { '60201394': { status: 'pending', retryAfterMs: 8500 } } });
     expect(mocks.departures).not.toHaveBeenCalled();
   });
 });

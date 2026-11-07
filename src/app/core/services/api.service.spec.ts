@@ -1,6 +1,6 @@
 import { createTestInjector } from '../../../../testing/injector';
 import { EnvironmentInjector, Injector, runInInjectionContext } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { createHmac, webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 import { firstValueFrom, of, throwError } from 'rxjs';
@@ -49,6 +49,27 @@ describe('ApiService request mapping', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     http.post.mockReturnValue(throwError(() => new Error('offline')));
     expect((await firstValueFrom(service.getRealTimeDepartures([60201394]))).errorOccurred).toBe(true);
+  });
+
+  it('retains cached monitors and retry metadata in a structured HTTP failure', async () => {
+    http.post.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503,
+      headers: new HttpHeaders({ 'Retry-After': '9' }), error: {
+        data: { monitors: [] }, errorOccurred: true, nextPollInMs: 8500,
+        stations: { '60201394': { status: 'stale', updatedAt: 1000, ageMs: 2000, retryAfterMs: 8500 } },
+      } })));
+    const response = await firstValueFrom(service.getRealTimeDepartures([60201394]));
+    expect(response.nextPollInMs).toBe(9000);
+    expect(response.stations!['60201394'].ageMs).toBe(2000);
+    expect(response.errorOccurred).toBe(true);
+  });
+
+  it('uses Retry-After for unstructured errors and ignores unsafe header values', async () => {
+    http.post.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503,
+      headers: new HttpHeaders({ 'Retry-After': '7' }), error: 'Unavailable' })))
+      .mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503,
+        headers: new HttpHeaders({ 'Retry-After': 'Infinity' }) })));
+    expect((await firstValueFrom(service.getRealTimeDepartures([60201394]))).nextPollInMs).toBe(7000);
+    expect((await firstValueFrom(service.getRealTimeDepartures([60201394]))).nextPollInMs).toBe(15000);
   });
 
   it('signs exactly the backend HMAC message and renews one rejected session', async () => {

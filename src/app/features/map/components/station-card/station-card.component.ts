@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { StationCard } from '../../map-presentation';
 import { FocusVisibilityDirective } from '../../../../shared/directives/focus-visibility.directive';
+import { DEPARTURE_REFRESH_MS } from '../../../../../../shared/departure-timing';
 
 @Component({
   selector: 'app-station-card',
@@ -27,7 +28,7 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
       </header>
       <div class="loading-line" [class.loading]="refresh().inFlight" aria-hidden="true">
         @for (progress of countdown(); track progress.nextRequestAt) {
-          <span class="refresh-countdown" [style.animation-duration.ms]="progress.intervalMs"
+          <span class="refresh-countdown" [style.animation-duration.ms]="progress.durationMs"
             [style.animation-delay.ms]="progress.delayMs"></span>
         }
       </div>
@@ -97,11 +98,12 @@ export class StationCardComponent {
   readonly close = output<void>();
   readonly refresh = computed(() => this.card().refresh);
   readonly countdown = computed(() => {
-    const { inFlight, nextRequestAt, intervalMs } = this.refresh();
+    const { inFlight, nextRequestAt } = this.refresh();
     if (inFlight || nextRequestAt === null) return [];
     // This computed value only changes with the polling schedule, not walking/card updates.
-    return [{ nextRequestAt, intervalMs,
-      delayMs: Math.max(-intervalMs, Math.min(0, nextRequestAt - Date.now() - intervalMs)) }];
+    // Longer error backoffs hold full until the final 15 seconds; shorter waits start part-empty.
+    return [{ nextRequestAt, durationMs: DEPARTURE_REFRESH_MS,
+      delayMs: Math.max(-DEPARTURE_REFRESH_MS, nextRequestAt - Date.now() - DEPARTURE_REFRESH_MS) }];
   });
   readonly statusMessage = computed(() => {
     const { status, rows } = this.card();

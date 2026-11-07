@@ -50,6 +50,14 @@ describe('Map station selection, rendering and lifecycle', () => {
   afterAll(() => TestBed.resetTestEnvironment());
   beforeEach(() => {
     vi.useFakeTimers();
+    for (const monitor of monitorSample.data!.monitors) {
+      for (const line of monitor.lines) {
+        line.departures.departure.forEach((departure, index) => {
+          departure.departureTime.timePlanned = new Date(Date.now() + (index + 1) * 60000).toISOString();
+          delete departure.departureTime.timeReal;
+        });
+      }
+    }
     localStorage.removeItem('viennaflow.map.metroLines');
     localStorage.removeItem('viennaflow.map.stations');
     sdk = installGoogleMaps();
@@ -153,10 +161,31 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(fixture.nativeElement.querySelector('.location-alert')).toBeNull();
   });
 
+  it('pauses departure requests offline and resumes immediately with the selected station', () => {
+    select('Tscherttegasse');
+    response.next({ ...monitorSample, timestamp: Date.now(), nextPollInMs: 5000 });
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    window.dispatchEvent(new Event('offline')); fixture.detectChanges();
+    expect(selectedCard().querySelector('.refresh-countdown')).toBeNull();
+    expect(selectedCard().querySelector('.loading-line.loading')).toBeNull();
+    vi.advanceTimersByTime(120000);
+    expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(1);
+    expect(selectedCard().querySelector('.countdown')).toBeNull();
+    expect(selectedCard().textContent).toContain('could not be loaded');
+    online.mockReturnValue(true);
+    window.dispatchEvent(new Event('online'));
+    vi.advanceTimersByTime(0); fixture.detectChanges();
+    expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(2);
+    expect(api.getRealTimeDepartures.mock.calls.at(-1)![0]).toEqual(['60201394']);
+    expect(selectedCard().querySelector('.loading-line.loading')).not.toBeNull();
+  });
+
   it('cancels the pending location-warning timeout on feature teardown', () => {
+    vi.advanceTimersByTime(0);
+    const existingTimers = vi.getTimerCount();
     locationAvailable.next(false); fixture.detectChanges();
     vi.advanceTimersByTime(0);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(existingTimers + 1);
     fixture.destroy();
     expect(locationAvailable.observed).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
@@ -631,17 +660,17 @@ describe('Map station selection, rendering and lifecycle', () => {
     close.focus();
     expect(card.querySelector('.loading-line.loading')).not.toBeNull();
     vi.advanceTimersByTime(2000);
-    first.next({ ...monitorSample, timestamp: Date.now() }); first.complete();
+    first.next({ ...monitorSample, timestamp: Date.now(), nextPollInMs: 10000 }); first.complete();
     const countdown = card.querySelector<HTMLElement>('.refresh-countdown')!;
     expect(countdown.style.animationDuration).toBe('15000ms');
-    expect(countdown.style.animationDelay).toBe('-2000ms');
+    expect(countdown.style.animationDelay).toBe('-5000ms');
     expect(card.querySelector('.loading-line.loading')).toBeNull();
     expect(card.querySelector('.departures')?.getAttribute('aria-busy')).toBe('false');
     vi.advanceTimersByTime(5000);
     resize(true); resize(false);
     expect(card.querySelector('.refresh-countdown')).toBe(countdown);
-    expect(countdown.style.animationDelay).toBe('-2000ms');
-    vi.advanceTimersByTime(8000);
+    expect(countdown.style.animationDelay).toBe('-5000ms');
+    vi.advanceTimersByTime(5000);
     expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(2);
     expect(card.querySelector('.loading-line.loading')).not.toBeNull();
     expect(card.querySelector('.refresh-countdown')).toBeNull();
@@ -649,11 +678,24 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(card.textContent).toContain('Floridsdorf');
     expect(document.activeElement).toBe(close);
     vi.advanceTimersByTime(3000);
-    second.next({ ...monitorSample, timestamp: Date.now() }); second.complete();
+    second.next({ ...monitorSample, timestamp: Date.now(), nextPollInMs: 4000 }); second.complete();
     const nextCountdown = card.querySelector<HTMLElement>('.refresh-countdown')!;
     expect(nextCountdown).not.toBe(countdown);
-    expect(nextCountdown.style.animationDelay).toBe('-3000ms');
+    expect(nextCountdown.style.animationDuration).toBe('15000ms');
+    expect(nextCountdown.style.animationDelay).toBe('-11000ms');
     expect(card.querySelector('.loading-line.loading')).toBeNull();
+  });
+
+  it('keeps the bar on a fifteen-second scale during a longer retry backoff', () => {
+    api.getRealTimeDepartures.mockReturnValue(of({ data: null, message: 'Unavailable', errorOccurred: true, nextPollInMs: 30000 }));
+    select('Tscherttegasse');
+    const bar = selectedCard().querySelector<HTMLElement>('.refresh-countdown')!;
+    expect(bar.style.animationDuration).toBe('15000ms');
+    expect(bar.style.animationDelay).toBe('15000ms');
+    vi.advanceTimersByTime(29999);
+    expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(api.getRealTimeDepartures).toHaveBeenCalledTimes(2);
   });
 
   it('supports choosing a station and Escape dismissal with focus restored to its control', async () => {
@@ -703,6 +745,7 @@ describe('Map station selection, rendering and lifecycle', () => {
     select('Tscherttegasse');
     response.next({ ...monitorSample, timestamp: Date.now() });
     const status = selectedCard().querySelector('[role="status"]');
+    vi.advanceTimersByTime(15000);
     response.error(new Error('Provider unavailable'));
     expect(selectedCard().textContent).toContain('Floridsdorf');
     expect(selectedCard().textContent).toContain('Showing earlier departures');

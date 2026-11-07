@@ -71,14 +71,19 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private media?: MediaQueryList;
   private selectionOrigin: HTMLElement | null = null;
   private readonly onResize = () => { this.mobile = this.media!.matches; this.render(); };
-  private readonly onVisibility = () => this.departures.setActive(document.visibilityState === 'visible');
-  private readonly onNetwork = () => { this.offline.set(!navigator.onLine); this.render(); };
+  private readonly onVisibility = () => { this.departures.setActive(document.visibilityState === 'visible'); this.render(); };
+  private readonly onNetwork = () => {
+    this.offline.set(!navigator.onLine);
+    this.departures.setOnline(navigator.onLine);
+    this.render();
+  };
 
   ngOnInit(): void {
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('online', this.onNetwork);
     window.addEventListener('offline', this.onNetwork);
     this.onVisibility();
+    this.onNetwork();
     this.departures.changes$.pipe(takeUntil(this.destroyed$)).subscribe(() => this.render());
     this.media = window.matchMedia('(max-width: 599px)');
     this.mobile = this.media.matches;

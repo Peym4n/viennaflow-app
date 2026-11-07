@@ -1,6 +1,7 @@
 import { LatLng } from '@shared-types/api-models';
 import { LineStopsResponse } from '../../core/services/api.service';
 import { DepartureRefresh, IDLE_DEPARTURE_REFRESH, StationDepartures } from './station-departures';
+import { DEPARTURE_MAX_AGE_MS } from '../../../../shared/departure-timing';
 
 export interface MapStation {
   id: number;
@@ -59,16 +60,21 @@ export function stationCard(
   selected: boolean, walkingMinutes?: number, now = Date.now(),
   refresh: DepartureRefresh = IDLE_DEPARTURE_REFRESH,
 ): StationCard {
-  const rows = (departures.monitor?.lines ?? []).flatMap(line => {
+  const receivedSourceTime = departures.updatedAt ?? now;
+  const sourceTime = departures.sampledAt ?? receivedSourceTime;
+  const displayNow = sourceTime + (now - receivedSourceTime);
+  const lines = now - receivedSourceTime >= DEPARTURE_MAX_AGE_MS ? [] : departures.monitor?.lines ?? [];
+  const rows = lines.flatMap(line => {
     const countdowns = line.departures.departure.flatMap(({ departureTime }): DepartureCountdown[] => {
-      const real = Date.parse(departureTime.timeReal ?? '');
+      const real = typeof departureTime.timeReal === 'string' ? Date.parse(departureTime.timeReal) : NaN;
       const countdown = departureTime.countdown;
-      const planned = Date.parse(departureTime.timePlanned);
+      const planned = typeof departureTime.timePlanned === 'string' ? Date.parse(departureTime.timePlanned) : NaN;
       const estimated = Number.isFinite(real) ? real
-        : typeof countdown === 'number' && Number.isFinite(countdown) && countdown >= 0 ? now + countdown * 60000 : undefined;
+        : typeof countdown === 'number' && Number.isFinite(countdown) && countdown >= 0 ? sourceTime + countdown * 60000 : undefined;
       const time = estimated ?? planned;
-      if (!Number.isFinite(time)) return [];
-      return [{ minutes: Math.max(0, Math.floor((time - now) / 60000)),
+      // Retain the current departure briefly, but never keep obsolete rows at "Now" indefinitely.
+      if (!Number.isFinite(time) || time < displayNow - 60000) return [];
+      return [{ minutes: Math.max(0, Math.floor((time - displayNow) / 60000)),
         status: estimated === undefined || !Number.isFinite(planned) ? 'scheduled'
           : estimated - planned > 60000 ? 'delayed' : 'on-time' }];
     }).slice(0, 2);

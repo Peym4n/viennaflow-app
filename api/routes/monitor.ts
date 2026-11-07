@@ -47,11 +47,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       failed: statuses.filter(station => station.status === 'error').length,
       oldestCacheAgeMs: Math.max(0, ...statuses.flatMap(station => station.updatedAt ? [Date.now() - station.updatedAt] : [])),
       requestMs: Date.now() - started }));
-    if (pending) res.setHeader('Retry-After', '15');
+    if (pending || response.errorOccurred || statuses.some(station => station.status === 'stale')) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((response.nextPollInMs ?? 15000) / 1000))));
+    }
     res.status(response.errorOccurred ? 503 : 200).json(response);
   } catch {
     console.warn('[monitor] Coordination unavailable');
     res.setHeader('Retry-After', '15');
-    res.status(503).json({ error: 'Departures are temporarily unavailable', errorOccurred: true });
+    res.status(503).json({ data: null, message: 'Departures are temporarily unavailable', errorOccurred: true,
+      nextPollInMs: 15000, timestamp: Date.now() });
   }
 }

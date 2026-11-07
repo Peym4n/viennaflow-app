@@ -144,7 +144,8 @@ export interface MonitorMessage {
 export interface MonitorApiResponse {
   data: MonitorData | null;
   message: MonitorMessage | string;
-  // Additional fields for the long-polling implementation
+  /** Remaining server-recommended delay before the next useful snapshot request. */
+  nextPollInMs?: number;
   errorOccurred?: boolean;
   timestamp?: number;
   error?: string;
@@ -154,6 +155,8 @@ export interface MonitorApiResponse {
 export interface StationMonitorStatus {
   status: 'data' | 'empty' | 'pending' | 'stale' | 'error';
   updatedAt?: number;
+  /** Age at response generation, independent of the browser's wall clock. */
+  ageMs?: number;
   retryAfterMs?: number;
 }
 
