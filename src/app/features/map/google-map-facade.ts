@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { MapStation, StationCard } from './map-presentation';
 import { StationCardComponent } from './components/station-card/station-card.component';
 import { CustomMapOverlayConstructor, ICustomMapOverlay, createCustomMapOverlayClass } from './components/map-view/custom-map-overlay';
+import { TapDragZoom } from './tap-drag-zoom';
 
 interface MapActions {
   selectStation: (id: number) => void;
@@ -28,6 +29,7 @@ export class GoogleMapFacade {
   private readonly injector = inject(EnvironmentInjector);
   private readonly zone = inject(NgZone);
   private map: google.maps.Map | null = null;
+  private tapDragZoom?: TapDragZoom;
   private userMarker: google.maps.Marker | null = null;
   private previousPosition: LatLng | null = null;
   private mobile: boolean | null = null;
@@ -44,6 +46,7 @@ export class GoogleMapFacade {
   private readonly resize = new ResizeObserver(() => this.cards.forEach(card => card.overlay.draw()));
 
   initialize(container: HTMLElement, catalog: LineStopsResponse, stations: ReadonlyMap<number, MapStation>, actions: MapActions): void {
+    if (this.map) this.destroy();
     this.actions = actions;
     this.stations = stations;
     this.overlayClass = createCustomMapOverlayClass(google.maps);
@@ -52,6 +55,10 @@ export class GoogleMapFacade {
       mapId: environment.googleMaps.mapId || 'vienna_metro_map', gestureHandling: 'greedy',
       mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
       zoomControl: true, zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_CENTER },
+    });
+    this.zone.runOutsideAngular(() => {
+      this.tapDragZoom = new TapDragZoom(container, this.map!);
+      this.tapDragZoom.attach();
     });
     const copy = (event: google.maps.MapMouseEvent) => {
       const position = event.latLng;
@@ -172,6 +179,8 @@ export class GoogleMapFacade {
   }
 
   destroy(): void {
+    this.tapDragZoom?.destroy();
+    this.tapDragZoom = undefined;
     this.resize.disconnect();
     this.cards.forEach(card => {
       card.overlay.destroy();

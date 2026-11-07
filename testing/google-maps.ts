@@ -30,11 +30,38 @@ export function installGoogleMaps() {
     trigger(name: string) { this.listeners.get(name)?.slice().forEach(callback => callback()); }
   }
   class MapDouble extends Events {
-    constructor(private readonly element: HTMLElement, readonly options: google.maps.MapOptions) { super(); maps.push(this); }
+    private center: LatLng;
+    private zoom: number;
+    readonly mapTypes = new Map([['roadmap', { minZoom: 0, maxZoom: 22 }]]);
+    constructor(private readonly element: HTMLElement, readonly options: google.maps.MapOptions) {
+      super(); maps.push(this);
+      const center = options.center as google.maps.LatLngLiteral | undefined;
+      this.center = new LatLng(center?.lat ?? 0, center?.lng ?? 0);
+      this.zoom = options.zoom ?? 13;
+    }
     getDiv() { return this.element; }
     setOptions(options: google.maps.MapOptions) { Object.assign(this.options, options); }
-    setCenter = vi.fn();
-    setZoom = vi.fn();
+    getCenter() { return this.center; }
+    getZoom() { return this.zoom; }
+    getHeading() { return this.options.heading ?? 0; }
+    getMapTypeId() { return this.options.mapTypeId ?? 'roadmap'; }
+    get(key: string): unknown { return key === 'isFractionalZoomEnabled' ? this.options.isFractionalZoomEnabled ?? true : Reflect.get(this.options, key); }
+    getProjection() { return {
+      fromLatLngToPoint: (position: LatLng) => new Point(position.lng(), position.lat()),
+      fromPointToLatLng: (position: Point) => new LatLng(position.y, position.x),
+    }; }
+    setCenter = vi.fn((position: LatLng | google.maps.LatLngLiteral) => {
+      this.center = position instanceof LatLng ? position : new LatLng(position.lat, position.lng);
+    });
+    setZoom = vi.fn((zoom: number) => { this.zoom = zoom; });
+    moveCamera = vi.fn((camera: google.maps.CameraOptions) => {
+      if (camera.zoom !== undefined) this.zoom = camera.zoom;
+      if (camera.center) {
+        const center = camera.center;
+        this.center = new LatLng(typeof center.lat === 'function' ? center.lat() : center.lat,
+          typeof center.lng === 'function' ? center.lng() : center.lng);
+      }
+    });
     panTo = vi.fn();
   }
   class Marker extends Events {

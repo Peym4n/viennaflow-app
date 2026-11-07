@@ -11,6 +11,7 @@ import { GoogleMapsService } from '../../../../core/services/google-maps.service
 import { ApiService, LineStopsResponse } from '../../../../core/services/api.service';
 import { Coordinates, LocationService } from '../../../../core/services/location.service';
 import { GoogleMapFacade } from '../../google-map-facade';
+import { catalogStations } from '../../map-presentation';
 import { installGoogleMaps } from '../../../../../../testing/google-maps';
 import { normalizeMonitorResponse } from '../../../../core/services/monitor-response';
 import fixtureData from '../../../../../../api/monitor-u6-sample.json';
@@ -739,6 +740,49 @@ describe('Map station selection, rendering and lifecycle', () => {
     response.next({ ...monitor, timestamp: Date.now() });
     expect(selectedCard().textContent).toContain('<img src=x onerror=alert(1)>');
     expect(selectedCard().querySelector('img')).toBeNull();
+  });
+
+  it('replaces gesture ownership with the map and releases listeners and frames on feature teardown', () => {
+    const facade = fixture.debugElement.injector.get(GoogleMapFacade);
+    const firstMap = sdk.maps[0];
+    const firstContainer = firstMap.getDiv();
+    vi.spyOn(firstContainer, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 400, 800));
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++nextFrame, callback); return nextFrame; });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => { frames.delete(id); });
+    const gesture = (container: HTMLElement) => {
+      const send = (type: string, id: number, y: number, ended = false) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        const touch = { identifier: id, clientX: 100, clientY: y };
+        Object.defineProperties(event, { touches: { value: ended ? [] : [touch] }, changedTouches: { value: [touch] } });
+        container.dispatchEvent(event);
+      };
+      send('touchstart', 1, 200); send('touchend', 1, 200, true);
+      send('touchstart', 2, 200); send('touchmove', 2, 350);
+    };
+    gesture(firstContainer);
+    expect(frames.size).toBe(1);
+    const replacement = document.createElement('div');
+    fixture.nativeElement.appendChild(replacement);
+    vi.spyOn(replacement, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 400, 800));
+    facade.initialize(replacement, catalog, catalogStations(catalog), {
+      selectStation: vi.fn(), closeStation: vi.fn(), copyCoordinates: vi.fn(),
+    });
+    expect(frames.size).toBe(0);
+    gesture(firstContainer);
+    expect(frames.size).toBe(0);
+    gesture(replacement);
+    expect(frames.size).toBe(1);
+    const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback(0));
+    expect(firstMap.moveCamera).not.toHaveBeenCalled();
+    expect(sdk.maps[1].moveCamera).toHaveBeenCalledTimes(1);
+    gesture(replacement);
+    fixture.destroy();
+    expect(frames.size).toBe(0);
+    gesture(replacement);
+    expect(frames.size).toBe(0);
+    expect(sdk.maps[1].moveCamera).toHaveBeenCalledTimes(1);
   });
 
   it('retains earlier departures with a stale status after a failed refresh', () => {
