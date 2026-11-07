@@ -20,6 +20,7 @@
     "types": ["google.maps"],
     "typeRoots": ["./node_modules/@types", "./src/types"],
     "paths": {
+      "@environments/environment": ["./src/environments/environment.ts"],
       "@shared-types/*": ["./types/*"]
     },
     "noEmit": true

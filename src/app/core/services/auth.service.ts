@@ -14,7 +14,7 @@ import {
 } from '@supabase/supabase-js';
 import { BehaviorSubject, Observable, from, of } from 'rxjs';
 import { map, distinctUntilChanged, catchError, tap } from 'rxjs/operators';
-import { environment } from '../../../environments/environment'; // Adjust path if needed
+import { environment } from '@environments/environment';
 
 import { ProfileService } from './profile.service'; // Added import
 import { SupabaseService } from './supabase.service';

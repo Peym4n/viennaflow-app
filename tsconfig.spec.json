@@ -3,6 +3,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "paths": {
+      "@environments/environment": ["./testing/environment.ts"],
+      "@shared-types/*": ["./types/*"]
+    },
     "resolveJsonModule": true,
     "outDir": "./out-tsc/spec",
     "types": [

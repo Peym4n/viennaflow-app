@@ -7,7 +7,6 @@ export default defineConfig({
   plugins: [angularJit()],
   resolve: {
     alias: [
-      { find: /^(?:.*\/)?environments\/environment$/, replacement: resolve(import.meta.dirname, 'testing/environment.ts') },
       { find: '@environments/environment', replacement: resolve(import.meta.dirname, 'testing/environment.ts') },
       { find: '@app', replacement: resolve(import.meta.dirname, 'src/app') },
       { find: '@shared-types', replacement: resolve(import.meta.dirname, 'types') },

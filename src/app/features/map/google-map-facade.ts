@@ -1,7 +1,7 @@
 import { ApplicationRef, ComponentRef, EnvironmentInjector, Injectable, NgZone, createComponent, inject } from '@angular/core';
 import { LatLng } from '@shared-types/api-models';
 import { LineStopsResponse } from '../../core/services/api.service';
-import { environment } from '../../../environments/environment';
+import { environment } from '@environments/environment';
 import { MapStation, StationCard } from './map-presentation';
 import { StationCardComponent } from './components/station-card/station-card.component';
 import { CustomMapOverlayConstructor, ICustomMapOverlay, createCustomMapOverlayClass } from './components/map-view/custom-map-overlay';
