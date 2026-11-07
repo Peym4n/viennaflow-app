@@ -33,10 +33,32 @@ describe('Station presentation rules', () => {
     monitor.lines[0].departures.departure[0].departureTime = { timeReal: '2026-10-26T12:05:00Z', timePlanned: '2026-10-26T12:20:00Z', countdown: 99 };
     monitor.lines[0].departures.departure[1].departureTime = { timeReal: '2026-10-26T12:10:00Z', timePlanned: '2026-10-26T12:20:00Z', countdown: 99 };
     const result = stationCard(station(1), { status: 'stale', monitor }, new Map([['U6', '#ffffff']]), true, undefined, Date.parse('2026-10-26T12:02:00Z'));
-    expect(result.rows[0].countdowns).toEqual([3, 8]);
+    expect(result.rows[0].countdowns.map(countdown => countdown.minutes)).toEqual([3, 8]);
     expect(result.rows[0].color).toBe('#ffffff');
     expect(result.status).toBe('stale');
     expect(result.walkingMinutes).toBeUndefined();
+  });
+
+  it.each([
+    { timeReal: '2026-10-26T12:04:00Z', countdown: 9, status: 'on-time' },
+    { timeReal: '2026-10-26T12:05:00Z', countdown: 9, status: 'on-time' },
+    { timeReal: '2026-10-26T12:06:00Z', countdown: 9, status: 'on-time' },
+    { timeReal: '2026-10-26T12:06:01Z', countdown: 0, status: 'delayed' },
+    { timeReal: undefined, countdown: 2, status: 'on-time' },
+    { timeReal: undefined, countdown: 3, status: 'on-time' },
+    { timeReal: undefined, countdown: 4, status: 'on-time' },
+    { timeReal: undefined, countdown: 4.1, status: 'delayed' },
+    { timeReal: 'invalid', countdown: 5, status: 'delayed' },
+    { timeReal: undefined, countdown: undefined, status: 'scheduled' },
+    { timeReal: 'invalid', countdown: NaN, status: 'scheduled' },
+  ])('classifies departure punctuality before rounding: %j', ({ timeReal, countdown, status }) => {
+    const monitor = normalizeMonitorResponse(fixture).data!.monitors[0];
+    monitor.lines[0].departures.departure = [{ departureTime: {
+      timeReal, countdown, timePlanned: '2026-10-26T12:05:00Z',
+    } }];
+    const card = stationCard(station(1), { status: 'data', monitor }, new Map(), false, undefined,
+      Date.parse('2026-10-26T12:02:00Z'));
+    expect(card.rows[0].countdowns[0].status).toBe(status);
   });
 
   it.each([
@@ -54,6 +76,6 @@ describe('Station presentation rules', () => {
       timeReal, countdown, timePlanned: '2026-10-26T12:10:59Z',
     } }];
     expect(stationCard(station(1), { status: 'data', monitor }, new Map(), false, undefined,
-      Date.parse('2026-10-26T12:02:00Z')).rows[0].countdowns).toEqual([expected]);
+      Date.parse('2026-10-26T12:02:00Z')).rows[0].countdowns.map(countdown => countdown.minutes)).toEqual([expected]);
   });
 });

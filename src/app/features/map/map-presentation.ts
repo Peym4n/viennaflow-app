@@ -11,12 +11,17 @@ export interface MapStation {
   color: string;
 }
 
+export interface DepartureCountdown {
+  minutes: number;
+  status: 'on-time' | 'delayed' | 'scheduled';
+}
+
 export interface DepartureRow {
   key: string;
   line: string;
   towards: string;
   color: string;
-  countdowns: number[];
+  countdowns: DepartureCountdown[];
 }
 
 export interface StationCard {
@@ -55,13 +60,17 @@ export function stationCard(
   refresh: DepartureRefresh = IDLE_DEPARTURE_REFRESH,
 ): StationCard {
   const rows = (departures.monitor?.lines ?? []).flatMap(line => {
-    const countdowns = line.departures.departure.flatMap(({ departureTime }) => {
+    const countdowns = line.departures.departure.flatMap(({ departureTime }): DepartureCountdown[] => {
       const real = Date.parse(departureTime.timeReal ?? '');
-      if (Number.isFinite(real)) return [Math.max(0, Math.floor((real - now) / 60000))];
       const countdown = departureTime.countdown;
-      if (typeof countdown === 'number' && Number.isFinite(countdown) && countdown >= 0) return [Math.floor(countdown)];
       const planned = Date.parse(departureTime.timePlanned);
-      return Number.isFinite(planned) ? [Math.max(0, Math.floor((planned - now) / 60000))] : [];
+      const estimated = Number.isFinite(real) ? real
+        : typeof countdown === 'number' && Number.isFinite(countdown) && countdown >= 0 ? now + countdown * 60000 : undefined;
+      const time = estimated ?? planned;
+      if (!Number.isFinite(time)) return [];
+      return [{ minutes: Math.max(0, Math.floor((time - now) / 60000)),
+        status: estimated === undefined || !Number.isFinite(planned) ? 'scheduled'
+          : estimated - planned > 60000 ? 'delayed' : 'on-time' }];
     }).slice(0, 2);
     if (!countdowns.length) return [];
     const color = colors.get(line.name) || '#595959';

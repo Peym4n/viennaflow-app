@@ -670,6 +670,26 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('renders punctuality separately for each departure and exposes its meaning as text', () => {
+    select('Tscherttegasse');
+    const monitor = structuredClone(monitorSample);
+    const planned = new Date(Date.now() + 120000).toISOString();
+    const lines = monitor.data!.monitors[0].lines;
+    lines[0].departures.departure = [
+      { departureTime: { timePlanned: planned, timeReal: new Date(Date.now() + 180000).toISOString() } },
+      { departureTime: { timePlanned: planned, countdown: 4 } },
+    ];
+    lines.push({ ...lines[0], towards: 'Other direction',
+      departures: { departure: [{ departureTime: { timePlanned: planned } }] } });
+    response.next({ ...monitor, timestamp: Date.now() });
+    const times = selectedCard().querySelectorAll('.countdown');
+    expect(times[0].classList.contains('on-time')).toBe(true);
+    expect(times[1].classList.contains('delayed')).toBe(true);
+    expect(times[1].textContent).toContain('more than 1 minute late');
+    expect(times[2].className).toBe('countdown');
+    expect(times[2].textContent).toContain('scheduled time');
+  });
+
   it('renders external direction text as text rather than markup', () => {
     select('Tscherttegasse');
     const monitor = structuredClone(monitorSample);

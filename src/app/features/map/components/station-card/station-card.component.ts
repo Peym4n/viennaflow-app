@@ -42,9 +42,10 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
             <span class="countdowns">
               @for (countdown of row.countdowns; track $index) {
                 @if (!$first) { <span class="separator" aria-hidden="true">|</span> }
-                <span class="countdown" [class.now]="countdown === 0">
-                  <span aria-hidden="true">{{ countdown === 0 ? 'Now' : countdown + '′' }}</span>
-                  <span class="visually-hidden">{{ countdown === 0 ? 'Departing now' : countdown === 1 ? '1 minute' : countdown + ' minutes' }}</span>
+                <span class="countdown" [class.on-time]="countdown.status === 'on-time'" [class.delayed]="countdown.status === 'delayed'"
+                  [title]="countdown.status === 'delayed' ? 'More than 1 minute late' : countdown.status === 'on-time' ? 'Early or no more than 1 minute late' : 'Scheduled time'">
+                  <span aria-hidden="true">{{ countdown.minutes === 0 ? 'Now' : countdown.minutes + '′' }}</span>
+                  <span class="visually-hidden">{{ countdown.minutes === 0 ? 'Departing now' : countdown.minutes === 1 ? '1 minute' : countdown.minutes + ' minutes' }}; {{ countdown.status === 'delayed' ? 'more than 1 minute late' : countdown.status === 'on-time' ? 'early or no more than 1 minute late' : 'scheduled time' }}</span>
                 </span>
               }
             </span>
@@ -76,8 +77,9 @@ import { FocusVisibilityDirective } from '../../../../shared/directives/focus-vi
     .direction-arrow { flex-shrink: 0; font-size: 16px; color: #595959; }
     .direction { flex: 1; min-width: 0; margin-inline-end: 8px; overflow-wrap: anywhere; font-weight: 700; font-size: 12px; }
     .countdowns { display: flex; align-items: center; gap: 5px; flex-shrink: 0; font-weight: 700; }
-    .countdown { color: #005eb8; }
-    .now { color: #17632b; }
+    .countdown { color: #000; }
+    .countdown.on-time { color: #17632b; }
+    .countdown.delayed { color: #8b0000; }
     .separator { color: #595959; }
     .status { color: #595959; font-size: 12px; margin: 5px 0 2px; }
     .status:empty { display: none; }
