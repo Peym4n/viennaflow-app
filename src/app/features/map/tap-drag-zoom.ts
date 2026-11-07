@@ -46,21 +46,9 @@ export class TapDragRecognizer {
   cancel(): void { this.previousTap = undefined; this.touch = undefined; }
 }
 
-/** Keep the second-tap location fixed in screen space while changing a flat map's scale. */
-export function anchoredZoomCenter(center: Position, offset: Position, startZoom: number, zoom: number, heading = 0): Position {
-  const angle = heading * Math.PI / 180;
-  const rotated = { x: offset.x * Math.cos(angle) - offset.y * Math.sin(angle),
-    y: offset.x * Math.sin(angle) + offset.y * Math.cos(angle) };
-  const scale = 2 ** -startZoom - 2 ** -zoom;
-  return { x: center.x + rotated.x * scale, y: center.y + rotated.y * scale };
-}
-
 interface Camera {
   zoom: number;
-  center: Position;
-  offset: Position;
-  heading: number;
-  projection: google.maps.Projection;
+  center: google.maps.LatLng;
   minZoom: number;
   maxZoom: number;
   fractional: boolean;
@@ -111,7 +99,7 @@ export class TapDragZoom {
     if (event.touches.length !== 1 || this.isInteractive(event.target)) { this.interrupt(); return; }
     const point = this.contact(event.touches[0]);
     if (!this.recognizer.start(point, event.timeStamp)) return;
-    this.camera = this.snapshot(point);
+    this.camera = this.snapshot();
     if (!this.camera) { this.interrupt(); return; }
     this.guardNativeDoubleTap();
     this.consume(event);
@@ -188,19 +176,14 @@ export class TapDragZoom {
     );
   }
 
-  private snapshot(point: Position): Camera | undefined {
+  private snapshot(): Camera | undefined {
     const zoom = this.map.getZoom();
     const center = this.map.getCenter();
-    const projection = this.map.getProjection();
-    const bounds = this.container.getBoundingClientRect();
-    const world = center && projection?.fromLatLngToPoint(center);
-    if (zoom === undefined || !Number.isFinite(zoom) || !projection || !world || !bounds.width || !bounds.height) return undefined;
+    if (zoom === undefined || !Number.isFinite(zoom) || !center) return undefined;
     const type = this.map.mapTypes.get(this.map.getMapTypeId() ?? 'roadmap') as google.maps.MapType | undefined;
     const min: unknown = this.map.get('minZoom');
     const max: unknown = this.map.get('maxZoom');
-    return { zoom, center: { x: world.x, y: world.y },
-      offset: { x: point.x - bounds.left - bounds.width / 2, y: point.y - bounds.top - bounds.height / 2 },
-      heading: this.map.getHeading() ?? 0, projection,
+    return { zoom, center,
       minZoom: typeof min === 'number' && Number.isFinite(min) ? min : type?.minZoom ?? 0,
       maxZoom: typeof max === 'number' && Number.isFinite(max) ? max : type?.maxZoom ?? 22,
       fractional: this.map.get('isFractionalZoomEnabled') !== false };
@@ -220,10 +203,7 @@ export class TapDragZoom {
     const camera = this.camera;
     const zoom = this.requestedZoom;
     if (!camera || zoom === undefined || zoom === this.appliedZoom) return;
-    const center = anchoredZoomCenter(camera.center, camera.offset, camera.zoom, zoom, camera.heading);
-    const latLng = camera.projection.fromPointToLatLng(new google.maps.Point(center.x, center.y));
-    if (!latLng) return;
-    this.map.moveCamera({ center: latLng, zoom });
+    this.map.moveCamera({ center: camera.center, zoom });
     this.appliedZoom = zoom;
   }
 }

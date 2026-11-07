@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { anchoredZoomCenter, TapDragRecognizer, TapDragZoom } from './tap-drag-zoom';
+import { TapDragRecognizer, TapDragZoom } from './tap-drag-zoom';
 import { installGoogleMaps } from '../../../../testing/google-maps';
 
 const contact = (x = 100, y = 200, id = 1) => ({ x, y, id });
@@ -49,23 +49,6 @@ describe('double-tap drag recognition', () => {
   });
 });
 
-describe('anchored camera calculation', () => {
-  it.each([1, 4, 10])('keeps the touched world point fixed at zoom %s', zoom => {
-    const center = { x: 100, y: 120 };
-    const offset = { x: 50, y: -80 };
-    const result = anchoredZoomCenter(center, offset, 3, zoom);
-    expect(result.x + offset.x / 2 ** zoom).toBeCloseTo(center.x + offset.x / 2 ** 3);
-    expect(result.y + offset.y / 2 ** zoom).toBeCloseTo(center.y + offset.y / 2 ** 3);
-  });
-
-  it('accounts for rotated flat maps and keeps centered gestures centered', () => {
-    expect(anchoredZoomCenter({ x: 100, y: 120 }, { x: 0, y: 0 }, 3, 4)).toEqual({ x: 100, y: 120 });
-    const result = anchoredZoomCenter({ x: 100, y: 120 }, { x: 80, y: 0 }, 3, 4, 90);
-    expect(result.x).toBeCloseTo(100);
-    expect(result.y).toBeCloseTo(125);
-  });
-});
-
 describe('map-scoped touch integration', () => {
   let sdk: ReturnType<typeof installGoogleMaps>;
   let container: HTMLDivElement;
@@ -102,6 +85,20 @@ describe('map-scoped touch integration', () => {
     send('touchstart'); send('touchend', [], surface, [contact()]); send('touchstart', [contact(100, 200, 2)]);
   }
   function flush() { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback(0)); }
+
+  it.each([0, 90])('keeps the map center fixed for off-center zoom gestures at heading %s', heading => {
+    map.setOptions({ heading });
+    const center = map.getCenter();
+    secondDown();
+    for (const [y, zoom] of [[350, 14], [50, 12], [200, 13]]) {
+      send('touchmove', [contact(100, y, 2)]); flush();
+      expect(map.getZoom()).toBe(zoom);
+      expect(map.getCenter().equals(center)).toBe(true);
+      expect(map.moveCamera).toHaveBeenLastCalledWith({ center, zoom });
+    }
+    send('touchend', [], surface, [contact(100, 200, 2)]);
+    expect(map.getCenter().equals(center)).toBe(true);
+  });
 
   it('passes ordinary touch/pan events to Maps but owns the second tap and drag', () => {
     const mapsStart = vi.fn(); const mapsMove = vi.fn();
@@ -172,8 +169,10 @@ describe('map-scoped touch integration', () => {
   });
 
   it('commits a plain double tap once and does not intercept mouse/keyboard events', () => {
+    const center = map.getCenter();
     secondDown(); send('touchend', [], surface, [contact(100, 200, 2)]);
     expect(map.getZoom()).toBe(14);
+    expect(map.getCenter().equals(center)).toBe(true);
     expect(map.moveCamera).toHaveBeenCalledTimes(1);
     expect(surface.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))).toBe(true);
     expect(surface.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true }))).toBe(true);
