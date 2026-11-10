@@ -40,11 +40,15 @@ describe('Station presentation rules', () => {
   });
 
   it.each([
+    { timeReal: '2026-10-26T12:03:59Z', countdown: 9, status: 'early' },
     { timeReal: '2026-10-26T12:04:00Z', countdown: 9, status: 'on-time' },
+    { timeReal: '2026-10-26T12:04:01Z', countdown: 9, status: 'on-time' },
     { timeReal: '2026-10-26T12:05:00Z', countdown: 9, status: 'on-time' },
     { timeReal: '2026-10-26T12:06:00Z', countdown: 9, status: 'on-time' },
     { timeReal: '2026-10-26T12:06:01Z', countdown: 0, status: 'delayed' },
+    { timeReal: undefined, countdown: 1.9, status: 'early' },
     { timeReal: undefined, countdown: 2, status: 'on-time' },
+    { timeReal: undefined, countdown: 2.1, status: 'on-time' },
     { timeReal: undefined, countdown: 3, status: 'on-time' },
     { timeReal: undefined, countdown: 4, status: 'on-time' },
     { timeReal: undefined, countdown: 4.1, status: 'delayed' },

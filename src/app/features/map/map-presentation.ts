@@ -14,7 +14,7 @@ export interface MapStation {
 
 export interface DepartureCountdown {
   minutes: number;
-  status: 'on-time' | 'delayed' | 'scheduled';
+  status: 'early' | 'on-time' | 'delayed' | 'scheduled';
 }
 
 export interface DepartureRow {
@@ -76,6 +76,7 @@ export function stationCard(
       if (!Number.isFinite(time) || time < displayNow - 60000) return [];
       return [{ minutes: Math.max(0, Math.floor((time - displayNow) / 60000)),
         status: estimated === undefined || !Number.isFinite(planned) ? 'scheduled'
+          : estimated - planned < -60000 ? 'early'
           : estimated - planned > 60000 ? 'delayed' : 'on-time' }];
     }).slice(0, 2);
     if (!countdowns.length) return [];

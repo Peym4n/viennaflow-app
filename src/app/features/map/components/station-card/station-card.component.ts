@@ -43,10 +43,10 @@ import { DEPARTURE_REFRESH_MS } from '../../../../../../shared/departure-timing'
             <span class="countdowns">
               @for (countdown of row.countdowns; track $index) {
                 @if (!$first) { <span class="separator" aria-hidden="true">|</span> }
-                <span class="countdown" [class.on-time]="countdown.status === 'on-time'" [class.delayed]="countdown.status === 'delayed'"
-                  [title]="countdown.status === 'delayed' ? 'More than 1 minute late' : countdown.status === 'on-time' ? 'Early or no more than 1 minute late' : 'Scheduled time'">
+                <span class="countdown" [class.early]="countdown.status === 'early'" [class.on-time]="countdown.status === 'on-time'" [class.delayed]="countdown.status === 'delayed'"
+                  [title]="countdown.status === 'early' ? 'More than 1 minute early' : countdown.status === 'delayed' ? 'More than 1 minute late' : countdown.status === 'on-time' ? 'Within 1 minute of scheduled time' : 'Scheduled time'">
                   <span aria-hidden="true">{{ countdown.minutes === 0 ? 'Now' : countdown.minutes + '′' }}</span>
-                  <span class="visually-hidden">{{ countdown.minutes === 0 ? 'Departing now' : countdown.minutes === 1 ? '1 minute' : countdown.minutes + ' minutes' }}; {{ countdown.status === 'delayed' ? 'more than 1 minute late' : countdown.status === 'on-time' ? 'early or no more than 1 minute late' : 'scheduled time' }}</span>
+                  <span class="visually-hidden">{{ countdown.minutes === 0 ? 'Departing now' : countdown.minutes === 1 ? '1 minute' : countdown.minutes + ' minutes' }}; {{ countdown.status === 'early' ? 'more than 1 minute early' : countdown.status === 'delayed' ? 'more than 1 minute late' : countdown.status === 'on-time' ? 'within 1 minute of scheduled time' : 'scheduled time' }}</span>
                 </span>
               }
             </span>
@@ -79,8 +79,9 @@ import { DEPARTURE_REFRESH_MS } from '../../../../../../shared/departure-timing'
     .direction { flex: 1; min-width: 0; margin-inline-end: 8px; overflow-wrap: anywhere; font-weight: 700; font-size: 12px; }
     .countdowns { display: flex; align-items: center; gap: 5px; flex-shrink: 0; font-weight: 700; }
     .countdown { color: #000; }
-    .countdown.on-time { color: #17632b; }
-    .countdown.delayed { color: #8b0000; }
+    .countdown.early { color: #163fb5; }
+    .countdown.on-time { color: #207a36; }
+    .countdown.delayed { color: #b02020; }
     .separator { color: #595959; }
     .status { color: #595959; font-size: 12px; margin: 5px 0 2px; }
     .status:empty { display: none; }

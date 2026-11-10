@@ -723,7 +723,10 @@ describe('Map station selection, rendering and lifecycle', () => {
       { departureTime: { timePlanned: planned, countdown: 4 } },
     ];
     lines.push({ ...lines[0], towards: 'Other direction',
-      departures: { departure: [{ departureTime: { timePlanned: planned } }] } });
+      departures: { departure: [
+        { departureTime: { timePlanned: planned } },
+        { departureTime: { timePlanned: planned, timeReal: new Date(Date.now() + 59000).toISOString() } },
+      ] } });
     response.next({ ...monitor, timestamp: Date.now() });
     const times = selectedCard().querySelectorAll('.countdown');
     expect(times[0].classList.contains('on-time')).toBe(true);
@@ -731,6 +734,9 @@ describe('Map station selection, rendering and lifecycle', () => {
     expect(times[1].textContent).toContain('more than 1 minute late');
     expect(times[2].className).toBe('countdown');
     expect(times[2].textContent).toContain('scheduled time');
+    expect(times[3].classList.contains('early')).toBe(true);
+    expect(times[3].getAttribute('title')).toBe('More than 1 minute early');
+    expect(times[3].textContent).toContain('more than 1 minute early');
   });
 
   it('renders external direction text as text rather than markup', () => {
