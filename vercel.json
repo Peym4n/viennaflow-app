@@ -1,12 +1,13 @@
 {
   "version": 2,
   "cleanUrls": true,
-  "crons": [
-    {
+  "schedules": {
+    "supabase-keepalive": {
       "path": "/api/cron/supabase-keepalive",
-      "schedule": "0 5 * * *"
+      "schedule": "0 5 * * *",
+      "requestMethod": "GET"
     }
-  ],
+  },
   "builds": [
     {
       "src": "package.json",
