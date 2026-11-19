@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import supabaseKeepalive from '../api/cron/supabase-keepalive.js';
 import walking from '../api/routes/walking-matrix.js';
 import session from '../api/session/init.js';
 import monitor from '../api/routes/monitor.js';
@@ -121,5 +122,67 @@ describe('walking HTTP contracts', () => {
     expect(result.body).toMatchObject({ nextPollInMs: 8500,
       stations: { '60201394': { status: 'pending', retryAfterMs: 8500 } } });
     expect(mocks.departures).not.toHaveBeenCalled();
+  });
+});
+
+describe('Supabase keepalive cron', () => {
+  const request = { method: 'GET', headers: { authorization: 'Bearer test-cron-secret' } };
+  const fetch = vi.fn<typeof globalThis.fetch>();
+
+  beforeEach(() => {
+    fetch.mockReset();
+    fetch.mockImplementation(async () => new Response('[]'));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubEnv('CRON_SECRET', 'test-cron-secret');
+    vi.stubEnv('SUPABASE_URL', 'https://supabase.example');
+    vi.stubEnv('SUPABASE_ANON_KEY', 'test-only');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('rejects unsupported methods and missing or invalid cron credentials before querying Supabase', async () => {
+    const post = await invoke(supabaseKeepalive, { ...request, method: 'POST' });
+    expect(post.status).toBe(405);
+    expect(post.headers.get('Allow')).toBe('GET');
+    expect((await invoke(supabaseKeepalive, { ...request, headers: {} })).status).toBe(401);
+    expect((await invoke(supabaseKeepalive, { ...request, headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
+    vi.stubEnv('CRON_SECRET', undefined);
+    expect((await invoke(supabaseKeepalive, request)).status).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('makes one bounded read of each public transit table and returns an uncacheable success', async () => {
+    const result = await invoke(supabaseKeepalive, request);
+    expect(result.status).toBe(200);
+    expect(result.headers.get('Cache-Control')).toBe('no-store');
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    const reads = Object.fromEntries(fetch.mock.calls.map(([input, init]) => {
+      const call = new Request(input, init);
+      const url = new URL(call.url);
+      return [url.pathname, { method: call.method, column: url.searchParams.get('select'), limit: url.searchParams.get('limit') }];
+    }));
+    expect(reads).toEqual({
+      '/rest/v1/linien': { method: 'GET', column: 'linien_id', limit: '1' },
+      '/rest/v1/haltestellen': { method: 'GET', column: 'haltestellen_id', limit: '1' },
+      '/rest/v1/steige': { method: 'GET', column: 'steig_id', limit: '1' },
+    });
+  });
+
+  it('reports a failed transit read without exposing provider details', async () => {
+    fetch.mockImplementation(async input => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      return url.pathname.endsWith('/steige')
+        ? Response.json({ message: 'private provider detail' }, { status: 403 })
+        : Response.json([]);
+    });
+
+    const result = await invoke(supabaseKeepalive, request);
+    expect(result.status).toBe(503);
+    expect(result.body).toEqual({ error: 'Supabase check temporarily unavailable' });
   });
 });

@@ -1,6 +1,12 @@
 {
   "version": 2,
   "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/cron/supabase-keepalive",
+      "schedule": "0 5 * * *"
+    }
+  ],
   "builds": [
     {
       "src": "package.json",

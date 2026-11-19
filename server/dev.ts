@@ -9,6 +9,7 @@ const port = preview ? 4300 : 3000;
 
 // An explicit route table prevents serving arbitrary files as API functions.
 const routes = {
+  '/api/cron/supabase-keepalive': () => import('../api/cron/supabase-keepalive.js'),
   '/api/getLineStops': () => import('../api/getLineStops.js'),
   '/api/getLines': () => import('../api/getLines.js'),
   '/api/getStops': () => import('../api/getStops.js'),
