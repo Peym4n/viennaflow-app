@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseDataClient } from '../server/supabase-data.js';
 import { getServerEnv as getEnv } from '../server/environment.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { numericQuery } from '../server/http.js';
@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const url = getEnv('SUPABASE_URL');
     const key = getEnv('SUPABASE_ANON_KEY');
     if (!url || !key) throw new Error('Nearby provider is not configured');
-    const client = createClient(url, key);
+    const client = createSupabaseDataClient(url, key);
     const { data, error } = await client.rpc('get_nearby_steige', { lat, lon, radius }).abortSignal(AbortSignal.timeout(8000));
     if (error) throw new Error('Nearby provider unavailable');
     res.status(200).json(normalizeNearbyPlatforms(data, getAllowedLineIds()));

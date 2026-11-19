@@ -1,5 +1,5 @@
 import { sendJson, validIdQuery } from '../server/http.js';
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseDataClient } from '../server/supabase-data.js';
 import { getServerEnv as getEnv } from '../server/environment.js';
 import { parseWkbPoint } from '../server/geometry.js';
 import { IncomingMessage, ServerResponse } from 'http';
@@ -95,7 +95,7 @@ export default async function handler(
     return;
   }
 
-  const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = createSupabaseDataClient(supabaseUrl, supabaseAnonKey);
   
   try {
     let stationIds: number[] = [];

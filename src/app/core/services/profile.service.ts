@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, of, from } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { UserProfile } from '../models/user-profile.model';
+import { SUPABASE_DATA_SCHEMA } from '../../../../shared/supabase-schema';
 
 @Injectable({
   providedIn: 'root',
@@ -41,6 +42,7 @@ export class ProfileService {
 
   public loadProfile(userId: string): Observable<UserProfile | null> { // Renamed and made public
     return from(this.supabase
+      .schema(SUPABASE_DATA_SCHEMA)
       .from('profiles')
       .select('*')
       .eq('id', userId)
@@ -87,6 +89,7 @@ export class ProfileService {
     }
 
     return from(this.supabase
+      .schema(SUPABASE_DATA_SCHEMA)
       .from('profiles')
       .update(updateData)
       .eq('id', currentUser.id)

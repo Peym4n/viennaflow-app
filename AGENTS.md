@@ -7,7 +7,7 @@ These instructions apply to the entire repository. Apply the architecture and An
 - ViennaFlow is a mobile-first Progressive Web App (PWA) that also supports desktop browsers.
 - The interface centers on Google Maps, with a top navbar, logo, and responsive hamburger menu.
 - The Angular frontend uses browser geolocation to display the user's location, transit lines, stations, live departures, and walking times.
-- Vercel serverless functions in `api/` provide backend APIs. Supabase provides transit data, authentication, and user profiles; Upstash Redis supports caching and request coordination.
+- Vercel serverless functions in `api/` provide backend APIs. Supabase provides transit data, authentication, and user profiles. The app queries the `api` Data API schema. Upstash Redis supports caching and request coordination.
 - Use Node.js `26.x`, as required by both package manifests. `.nvmrc` pins `26.13.1` for local development and CI. Angular is pinned to `22.3.0`. Consult `package.json`, `api/package.json`, and `package-lock.json` for other dependency versions.
 
 ## Architecture and responsibility boundaries
@@ -156,7 +156,7 @@ Keep frontend calls and backend request/response contracts consistent. Browser-f
 | `api/getLines.ts` | Query Supabase `linien` for metro line metadata. |
 | `api/getStops.ts` | Query main stations by line, station IDs, or the default metro selection; convert WKB geometry to GeoJSON. |
 | `api/getSteige.ts` | Query platforms for a main station and convert WKB geometry to GeoJSON. |
-| `api/getNearbySteige.ts` | Call the Supabase `get_nearby_steige` RPC with latitude, longitude, and radius; filter platforms against the allowed line IDs from `lineStops.json`. |
+| `api/getNearbySteige.ts` | Call the Supabase `api.get_nearby_steige` RPC with latitude, longitude, and radius; filter platforms against the allowed line IDs from `lineStops.json`. |
 | `api/routes/monitor.ts` | Primary live-departure endpoint, accepting POST requests with `divaIds`; batch and throttle Wiener Linien OGD requests using caching, distributed locks, and a pending-request queue. |
 | `api/session/init.ts` | Initialize the request-signing session using a `sessionId` cookie and a Redis-backed signing key. |
 | `api/routes/walking-matrix.ts` | Accept signed POST requests and calculate walking durations through the Google Distance Matrix API using a server-side key. |
@@ -185,7 +185,7 @@ Keep frontend calls and backend request/response contracts consistent. Browser-f
 - `AuthService` manages Supabase authentication state. `ProfileService` loads the current user's profile and updates their username.
 - `AuthService` obtains `ProfileService` lazily through Angular's `Injector` to avoid their circular dependency. Account for this dependency when refactoring either service.
 - The profile UI displays the email and allows username changes. The navbar prefers the username, then the user's email, with a generic profile label as a final fallback.
-- The documented database design includes `public.profiles` with an `id` referencing `auth.users.id`, a unique username, and an email; a `handle_new_user` trigger creates profiles from new auth users and optional username metadata.
+- The documented database design includes `api.profiles` with an `id` referencing `auth.users.id`, a unique username, and an email. Account creation depends on the deployed `handle_new_user` trigger.
 - Preserve user-specific access through Row Level Security for `profiles` and `user_favorite_stations`. Verify the deployed policy and trigger definitions before relying on or changing them; their definitions are not versioned in this repository.
 
 ## Known limitations and assumptions

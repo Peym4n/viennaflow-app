@@ -15,9 +15,9 @@ let started = false;
 const migrations = ['20261026000100_transit_baseline.sql', '20261026000200_transit_public_readonly.sql',
   '20261026000300_transit_spatial_index.sql'];
 const sample = (lat = 48.2082, lon = 16.3738, radius = 800) => client!.query(
-  'SELECT * FROM public.get_nearby_steige($1, $2, $3) ORDER BY fk_haltestellen_id, fk_linien_id, steig_id', [lat, lon, radius]);
+  'SELECT * FROM api.get_nearby_steige($1, $2, $3) ORDER BY fk_haltestellen_id, fk_linien_id, steig_id', [lat, lon, radius]);
 const explain = async () => (await client!.query(`EXPLAIN (ANALYZE, TIMING FALSE, FORMAT JSON)
-  SELECT * FROM public.steige WHERE ST_DWithin(location::geography,
+  SELECT * FROM api.steige WHERE ST_DWithin(location::geography,
     ST_Point(16.3738,48.2082,4326)::geography, 800)`)).rows[0]['QUERY PLAN'];
 
 try {
@@ -44,36 +44,42 @@ try {
     FROM public.profiles p JOIN pg_class c ON c.oid = 'public.profiles'::regclass`)).rows;
   const accountBefore = await accountSnapshot();
   await client.query(await fs.readFile('supabase/migrations/20250612022830_legacy_history_marker.sql', 'utf8'));
-  await client.query(await fs.readFile('supabase/migrations/' + migrations[0], 'utf8'));
+  for (const file of migrations) await client.query(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   await client.query(await fs.readFile('supabase/seed.sql', 'utf8'));
-  await client.query(`INSERT INTO public.steige (steig_id, fk_linien_id, fk_haltestellen_id, richtung,
+  await client.query(`INSERT INTO api.steige (steig_id, fk_linien_id, fk_haltestellen_id, richtung,
       reihenfolge, bereich, steig, location, stand)
     SELECT n, 9, 103, 'H', n, 1, 'X', ST_Point(17 + (n % 100) * 0.0001,
       49 + (n / 100) * 0.0001,4326)::geography, '2025-04-20'::timestamp
     FROM generate_series(100,8099) n;
-    ANALYZE public.linien; ANALYZE public.haltestellen; ANALYZE public.steige;`);
-  const before = [await sample(), await sample(48.2082,16.3738,5000), await sample(0,0)];
-  assert.equal(before[0].rows.length, 4, 'Include metro/bus platforms and repeated main stations; exclude null/far locations');
-  assert.equal(before[0].rows.filter(row => row.fk_haltestellen_id === '101').length, 3);
-  assert.deepEqual(JSON.parse(before[0].rows[0]['location']), { type: 'Point', coordinates: [16.3738,48.2082] });
-  assert.equal(before[2].rows.length, 0);
-  const beforePlan = await explain();
-  for (const file of migrations.slice(1)) await client.query(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+    ANALYZE api.linien; ANALYZE api.haltestellen; ANALYZE api.steige;`);
+  const nearby = await sample();
+  const broadRadius = await sample(48.2082, 16.3738, 5000);
+  const noMatches = await sample(0, 0);
+  assert.equal(nearby.rows.length, 4, 'Include metro/bus platforms and repeated main stations and exclude null and distant locations');
+  assert.equal(nearby.rows.filter(row => row.fk_haltestellen_id === '101').length, 3);
+  assert.deepEqual(JSON.parse(nearby.rows[0]['location']), { type: 'Point', coordinates: [16.3738, 48.2082] });
+  assert.equal(noMatches.rows.length, 0);
   const afterPlan = await explain();
   assert.ok(JSON.stringify(afterPlan).includes('steige_location_gist_idx'), 'Use the spatial index for the selective query');
-  assert.deepEqual((await sample()).rows, before[0].rows);
-  assert.deepEqual((await sample(48.2082,16.3738,5000)).rows, before[1].rows);
-  assert.deepEqual((await sample(0,0)).rows, before[2].rows);
-  assert.equal((await client.query('SELECT * FROM public.get_nearby_steige(48.2082,16.3738)')).rowCount, 4);
+
+  // Compare results without the index and roll back the drop in the fixture database.
+  await client.query('BEGIN');
+  await client.query('DROP INDEX api.steige_location_gist_idx');
+  const beforePlan = await explain();
+  assert.deepEqual((await sample()).rows, nearby.rows);
+  assert.deepEqual((await sample(48.2082, 16.3738, 5000)).rows, broadRadius.rows);
+  assert.deepEqual((await sample(0, 0)).rows, noMatches.rows);
+  await client.query('ROLLBACK');
+  assert.equal((await client.query('SELECT * FROM api.get_nearby_steige(48.2082,16.3738)')).rowCount, 4);
 
   let deniedWrites = 0;
   for (const role of ['anon', 'authenticated']) {
     await client.query('SET ROLE ' + role);
-    assert.deepEqual((await sample()).rows, before[0].rows, `${role} keeps the same nearby results`);
+    assert.deepEqual((await sample()).rows, nearby.rows, `${role} keeps the same nearby results`);
     for (const table of ['linien', 'haltestellen', 'steige']) {
-      assert.ok((await client.query('SELECT * FROM public.' + table + ' LIMIT 1')).rowCount);
-      for (const statement of [`INSERT INTO public.${table} SELECT * FROM public.${table} LIMIT 1`,
-        `UPDATE public.${table} SET stand = stand`, `DELETE FROM public.${table}`, `TRUNCATE public.${table}`]) {
+      assert.ok((await client.query('SELECT * FROM api.' + table + ' LIMIT 1')).rowCount);
+      for (const statement of [`INSERT INTO api.${table} SELECT * FROM api.${table} LIMIT 1`,
+        `UPDATE api.${table} SET stand = stand`, `DELETE FROM api.${table}`, `TRUNCATE api.${table}`]) {
         await assert.rejects(client.query(statement), (error: unknown) =>
           !!error && typeof error === 'object' && 'code' in error && error.code === '42501');
         deniedWrites++;
@@ -82,20 +88,20 @@ try {
     await client.query('RESET ROLE');
   }
   // RLS still protects data if a table write grant is added accidentally later.
-  await client.query('GRANT INSERT ON public.linien TO anon; SET ROLE anon');
-  await assert.rejects(client.query(`INSERT INTO public.linien VALUES (99,'Denied',99,false,'ptBus',now())`),
+  await client.query('GRANT INSERT ON api.linien TO anon; SET ROLE anon');
+  await assert.rejects(client.query(`INSERT INTO api.linien VALUES (99,'Denied',99,false,'ptBus',now())`),
     (error: unknown) => !!error && typeof error === 'object' && 'code' in error && error.code === '42501');
-  await client.query('RESET ROLE; REVOKE INSERT ON public.linien FROM anon; SET ROLE service_role');
-  await client.query(`INSERT INTO public.linien VALUES (99,'Admin import',99,false,'ptBus',now());
-    UPDATE public.linien SET bezeichnung = 'Admin updated' WHERE linien_id = 99;
-    DELETE FROM public.linien WHERE linien_id = 99; RESET ROLE;`);
+  await client.query('RESET ROLE; REVOKE INSERT ON api.linien FROM anon; SET ROLE service_role');
+  await client.query(`INSERT INTO api.linien VALUES (99,'Admin import',99,false,'ptBus',now());
+    UPDATE api.linien SET bezeichnung = 'Admin updated' WHERE linien_id = 99;
+    DELETE FROM api.linien WHERE linien_id = 99; RESET ROLE;`);
   assert.deepEqual(await accountSnapshot(), accountBefore, 'Keep unrelated account data/permissions unchanged');
   const versions = (await client.query('SELECT version(), postgis_lib_version() AS postgis')).rows[0];
   const report = { image, versions, fixturePlatforms: 8006, deniedWrites, unchangedNearbyRows: 4,
     beforePlan, afterPlan, scope: 'Synthetic local fixtures; not production performance measurements' };
   await fs.mkdir('tmp', { recursive: true });
   await fs.writeFile('tmp/transit-database-check.json', JSON.stringify(report, null, 2) + '\n');
-  console.log(`Transit database checks passed: unchanged RPC results, ${deniedWrites} denied public writes, RLS, admin imports, account isolation and GiST usage`);
+  console.log(`Transit database checks passed for the api schema, including RPC results, ${deniedWrites} denied public writes, RLS, admin imports, account isolation and GiST usage`);
 } finally {
   await client?.end().catch(() => undefined);
   if (started && /^viennaflow-transit-check-[a-f0-9-]+$/.test(container)) {

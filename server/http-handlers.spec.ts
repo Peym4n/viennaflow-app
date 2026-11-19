@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import supabaseKeepalive from '../api/cron/supabase-keepalive.js';
+import nearby from '../api/getNearbySteige.js';
 import walking from '../api/routes/walking-matrix.js';
 import session from '../api/session/init.js';
 import monitor from '../api/routes/monitor.js';
@@ -125,7 +126,7 @@ describe('walking HTTP contracts', () => {
   });
 });
 
-describe('Supabase keepalive cron', () => {
+describe('Supabase HTTP contracts', () => {
   const request = { method: 'GET', headers: { authorization: 'Bearer test-cron-secret' } };
   const fetch = vi.fn<typeof globalThis.fetch>();
 
@@ -164,13 +165,28 @@ describe('Supabase keepalive cron', () => {
     const reads = Object.fromEntries(fetch.mock.calls.map(([input, init]) => {
       const call = new Request(input, init);
       const url = new URL(call.url);
-      return [url.pathname, { method: call.method, column: url.searchParams.get('select'), limit: url.searchParams.get('limit') }];
+      return [url.pathname, { method: call.method, schema: call.headers.get('Accept-Profile'),
+        column: url.searchParams.get('select'), limit: url.searchParams.get('limit') }];
     }));
     expect(reads).toEqual({
-      '/rest/v1/linien': { method: 'GET', column: 'linien_id', limit: '1' },
-      '/rest/v1/haltestellen': { method: 'GET', column: 'haltestellen_id', limit: '1' },
-      '/rest/v1/steige': { method: 'GET', column: 'steig_id', limit: '1' },
+      '/rest/v1/linien': { method: 'GET', schema: 'api', column: 'linien_id', limit: '1' },
+      '/rest/v1/haltestellen': { method: 'GET', schema: 'api', column: 'haltestellen_id', limit: '1' },
+      '/rest/v1/steige': { method: 'GET', schema: 'api', column: 'steig_id', limit: '1' },
     });
+  });
+
+  it('calls the nearby function in the exposed api schema', async () => {
+    const result = await invoke(nearby, { method: 'GET', query: { lat: '48.2', lon: '16.3', radius: '800' } });
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const [input, init] = fetch.mock.calls[0];
+    const rpc = new Request(input, init);
+    expect(new URL(rpc.url).pathname).toBe('/rest/v1/rpc/get_nearby_steige');
+    expect(rpc.method).toBe('POST');
+    expect(rpc.headers.get('Content-Profile')).toBe('api');
+    expect(await rpc.json()).toEqual({ lat: 48.2, lon: 16.3, radius: 800 });
   });
 
   it('reports a failed transit read without exposing provider details', async () => {
