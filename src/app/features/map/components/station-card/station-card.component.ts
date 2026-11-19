@@ -57,7 +57,7 @@ import { DEPARTURE_REFRESH_MS } from '../../../../../../shared/departure-timing'
     </section>
   `,
   styles: `
-    :host { display: block; width: max-content; max-width: 100%; color: #212529; font: 13px/1.5 Roboto, Arial, sans-serif; }
+    :host { display: block; width: max-content; max-width: 100%; color: #212529; font: 13px/1.5 Roboto, Arial, sans-serif; cursor: default; }
     .custom-map-overlay { box-sizing: border-box; background: #fff; border: 1px solid #aaa; border-radius: 8px; box-shadow: 0 2px 6px #0003; padding: 6px 8px; }
     .selected { border-color: #3367a8; }
     header { display: flex; align-items: center; gap: 4px; }
