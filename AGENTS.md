@@ -8,7 +8,7 @@ These instructions apply to the entire repository. Apply the architecture and An
 - The interface centers on Google Maps, with a top navbar, logo, and responsive hamburger menu.
 - The Angular frontend uses browser geolocation to display the user's location, transit lines, stations, live departures, and walking times.
 - Vercel serverless functions in `api/` provide backend APIs. Supabase provides transit data, authentication, and user profiles; Upstash Redis supports caching and request coordination.
-- Use Node.js `22.22.3` or a newer Node 22 patch, as required by both package manifests and `.nvmrc`. Angular is pinned to `22.2.3`. Consult `package.json`, `api/package.json`, and `package-lock.json` for other dependency versions.
+- Use Node.js `26.x`, as required by both package manifests. `.nvmrc` pins `26.13.1` for local development and CI. Angular is pinned to `22.3.0`. Consult `package.json`, `api/package.json`, and `package-lock.json` for other dependency versions.
 
 ## Architecture and responsibility boundaries
 
@@ -168,7 +168,7 @@ Keep frontend calls and backend request/response contracts consistent. Browser-f
 
 ### Environment configuration and request signing
 
-- Use dotenvx for encrypted `.env`, `.env.staging`, and `.env.production` files. Follow the existing `dotenvx.get()` pattern for managed values and keep development, staging, and production configuration separate.
+- Use dotenvx for encrypted `.env`, `.env.staging`, and `.env.production` files. Read managed values through the shared configuration helper, which uses `dotenvx.getSync()`. Keep development, staging, and production configuration separate.
 - `VIENNAFLOW_ENV` selects one managed environment explicitly, defaulting to development; Vercel preview selects staging. Platform variables take precedence. Use the shared configuration helper and never fall back to another environment's credentials. Browser generation validates required public values and serializes them with `JSON.stringify`.
 - Never commit decrypted credentials or `.env.keys`. The Husky pre-commit hook checks root `.env*` files for unencrypted values, except dotenvx public-key entries and the ignored key file.
 - `src/environments/environment.ts` is generated and ignored by Git. Change `scripts/generate-env.js` or the managed configuration instead of editing the generated file.

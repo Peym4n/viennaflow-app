@@ -1,9 +1,9 @@
 import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { get } from '@dotenvx/dotenvx';
+import { getSync } from '@dotenvx/dotenvx';
 import { browserEnvironment, environmentFile, environmentMode, managedValue, serializeBrowserEnvironment } from '../scripts/environment.js';
 
-vi.mock('@dotenvx/dotenvx', () => ({ get: vi.fn(() => 'file-value') }));
+vi.mock('@dotenvx/dotenvx', () => ({ getSync: vi.fn(() => 'file-value') }));
 const values: Record<string, string> = { GOOGLE_MAPS_API_KEY: 'browser-key', GOOGLE_MAPS_MAP_ID: 'map-id',
   SUPABASE_URL: 'https://example.supabase.co', SUPABASE_ANON_KEY: 'publishable-key', REDIS_TOKEN: 'server-secret' };
 afterEach(() => vi.unstubAllEnvs());
@@ -23,7 +23,7 @@ describe('Environment configuration', () => {
     vi.stubEnv('CONFIG_TEST_VALUE', 'platform-value');
     expect(managedValue('CONFIG_TEST_VALUE')).toBe('platform-value');
     expect(managedValue('UNSET_CONFIG_TEST_VALUE')).toBe('file-value');
-    expect(get).toHaveBeenCalledWith('UNSET_CONFIG_TEST_VALUE', { path: environmentFile('staging'), strict: true });
+    expect(getSync).toHaveBeenCalledWith('UNSET_CONFIG_TEST_VALUE', { path: environmentFile('staging'), strict: true });
   });
 
   it('serializes browser values safely and excludes server-only configuration', () => {

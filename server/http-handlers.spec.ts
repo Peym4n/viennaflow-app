@@ -8,7 +8,7 @@ import monitor from '../api/routes/monitor.js';
 const mocks = vi.hoisted(() => ({ mget: vi.fn(), get: vi.fn(), set: vi.fn(), ttl: vi.fn(), usage: vi.fn(), fetch: vi.fn(), departures: vi.fn(),
   eval: vi.fn(), pipeline: vi.fn() }));
 vi.mock('./redis.js', () => ({ getRedis: () => mocks }));
-vi.mock('@dotenvx/dotenvx', () => ({ get: () => 'test-only' }));
+vi.mock('@dotenvx/dotenvx', () => ({ getSync: () => 'test-only' }));
 vi.mock('./walking-limits.js', () => ({ reserveWalkingUsage: mocks.usage }));
 vi.mock('./departure-provider.js', () => ({ fetchDepartures: mocks.departures }));
 vi.mock('./walking.js', async importOriginal => ({ ...await importOriginal<typeof import('./walking.js')>(), fetchWalkingMatrix: mocks.fetch }));

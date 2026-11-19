@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { get } from '@dotenvx/dotenvx';
+import { getSync } from '@dotenvx/dotenvx';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -24,7 +24,7 @@ export function managedValue(name) {
   const configured = process.env[name];
   if (configured !== undefined && !configured.startsWith('encrypted:')) return configured;
   try {
-    const value = get(name, { path: environmentFile(), strict: true });
+    const value = getSync(name, { path: environmentFile(), strict: true });
     return value?.startsWith('encrypted:') ? undefined : value;
   }
   catch { return undefined; }

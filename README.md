@@ -3,7 +3,7 @@ Real-Time Transit, Effortless Journeys!
 
 ## Prerequisites
 
-Use Node.js 22.22.3 or a newer Node 22 patch and npm (`.nvmrc` records the minimum). Local development runs the existing API functions directly; Vercel login is only needed when checking Vercel-specific behavior or deployment.
+Use Node.js 26.x and npm. `.nvmrc` pins 26.13.1 for local development and CI. Local development runs the existing API functions directly. Vercel login is only needed for Vercel-specific checks or deployment.
 
 ## Getting started
 
