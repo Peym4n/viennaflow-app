@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { ApiRequest, ApiResponse } from '../../server/http.js';
 import { normalizeDiva } from '../../shared/monitor-response.js';
 import { DepartureCoordinator, MAX_BATCH } from '../../server/departure-coordinator.js';
 import { MemoryDepartureCache, RedisDepartureCache } from '../../server/departure-cache.js';
@@ -17,7 +17,7 @@ function getCoordinator(): DepartureCoordinator {
   return new DepartureCoordinator(new RedisDepartureCache(getRedis()), fetchDepartures);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   const started = Date.now();
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {

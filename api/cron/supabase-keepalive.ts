@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { ApiRequest, ApiResponse } from '../../server/http.js';
 import { getServerEnv } from '../../server/environment.js';
 import { createSupabaseDataClient } from '../../server/supabase-data.js';
 
@@ -8,7 +8,7 @@ const transitTables = [
   { table: 'steige', id: 'steig_id' },
 ] as const;
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');

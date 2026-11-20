@@ -1,4 +1,16 @@
-import { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+export interface ApiRequest extends Pick<IncomingMessage, 'method' | 'headers'> {
+  query: Record<string, string | string[] | undefined>;
+  cookies?: Record<string, string | undefined>;
+  body?: unknown;
+}
+
+export interface ApiResponse {
+  setHeader(name: string, value: string): void;
+  status(code: number): ApiResponse;
+  json(body: unknown): void;
+}
 
 export function sendJson(res: ServerResponse, status: number, value: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json' });

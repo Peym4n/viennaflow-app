@@ -1,11 +1,10 @@
 import { createSupabaseDataClient } from '../server/supabase-data.js';
 import { getServerEnv as getEnv } from '../server/environment.js';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { numericQuery } from '../server/http.js';
+import { numericQuery, type ApiRequest, type ApiResponse } from '../server/http.js';
 import { getAllowedLineIds } from '../server/transit-catalog.js';
 import { normalizeNearbyPlatforms } from '../server/nearby-platforms.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.status(405).json({ error: 'Method not allowed' });

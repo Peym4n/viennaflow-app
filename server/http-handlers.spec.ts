@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { ApiRequest, ApiResponse } from './http.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import supabaseKeepalive from '../api/cron/supabase-keepalive.js';
 import nearby from '../api/getNearbySteige.js';
@@ -15,14 +15,14 @@ vi.mock('./walking-limits.js', () => ({ reserveWalkingUsage: mocks.usage }));
 vi.mock('./departure-provider.js', () => ({ fetchDepartures: mocks.departures }));
 vi.mock('./walking.js', async importOriginal => ({ ...await importOriginal<typeof import('./walking.js')>(), fetchWalkingMatrix: mocks.fetch }));
 
-async function invoke(handler: typeof walking, request: object) {
-  const result = { status: 0, headers: new Map<string, unknown>(), body: null as unknown };
-  const response = {
-    setHeader: (key: string, value: unknown) => result.headers.set(key, value),
+async function invoke(handler: typeof walking, request: Partial<ApiRequest>) {
+  const result = { status: 0, headers: new Map<string, string>(), body: null as unknown };
+  const response: ApiResponse = {
+    setHeader: (key, value) => { result.headers.set(key, value); },
     status: (code: number) => { result.status = code; return response; },
     json: (body: unknown) => { result.body = body; },
   };
-  await handler(request as VercelRequest, response as unknown as VercelResponse);
+  await handler({ headers: {}, query: {}, ...request }, response);
   return result;
 }
 
