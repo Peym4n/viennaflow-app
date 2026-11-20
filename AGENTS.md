@@ -8,7 +8,7 @@ These instructions apply to the entire repository. Apply the architecture and An
 - The interface centers on Google Maps, with a top navbar, logo, and responsive hamburger menu.
 - The Angular frontend uses browser geolocation to display the user's location, transit lines, stations, live departures, and walking times.
 - Vercel serverless functions in `api/` provide backend APIs. Supabase provides transit data, authentication, and user profiles. The app queries the `api` Data API schema. Upstash Redis supports caching and request coordination.
-- Use Node.js `26.x`, as required by both package manifests. `.nvmrc` pins `26.13.1` for local development and CI. Angular is pinned to `22.3.0`. Consult `package.json`, `api/package.json`, and `package-lock.json` for other dependency versions.
+- Use Node.js `26.x`, as required by both package manifests. `.nvmrc` pins `26.13.1` for local development and CI. Angular is pinned to `22.3.0` and requires TypeScript 6 for frontend builds and tests. The `api` workspace runs backend type checks with TypeScript 7. Consult `package.json`, `api/package.json`, and `package-lock.json` for dependency versions.
 
 ## Architecture and responsibility boundaries
 
@@ -122,6 +122,7 @@ Run commands from the repository root. The root npm workspace includes `api/`.
 | `npm run test:coverage` | Generate V8 coverage reports. |
 
 - The direct local API runner requires no Vercel login. Vercel-specific checks require its CLI and a linked project. Environment decryption requires the maintainer-provided key, as described in `README.md`.
+- The npm override for `@oxc-parser/binding-wasm32-wasi@0.158.0` aligns its EMNAPI packages with the WASM runtime's peer requirements. Recheck the binding's declared dependencies when updating Angular.
 - Frontend startup generates the environment module. Development uses `--no-hmr` because template replacement can detach the Google Maps host while retaining its SDK instance.
 - Angular serves on `http://localhost:4200`. `proxy.conf.json` forwards `/api` requests to `http://localhost:3000`.
 - `vitest.config.ts` and `src/test-setup.ts` configure isolated frontend tests with nonsecret environment fixtures. Use supported injection contexts/provider doubles without replacing Angular core globally. `vitest.backend.config.ts` runs server specs under Node.

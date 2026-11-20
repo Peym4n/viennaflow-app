@@ -25,7 +25,7 @@
     "test:frontend": "vitest run",
     "test:backend": "vitest run --config vitest.backend.config.ts",
     "test:database": "tsx scripts/check-transit-database.ts",
-    "typecheck:backend": "tsc --project api/tsconfig.json --noEmit && tsc --project tsconfig.server.json --noEmit",
+    "typecheck:backend": "npm run typecheck --workspace api",
     "typecheck:tests": "tsc --project tsconfig.spec.json --noEmit",
     "check": "npm test && npm run typecheck:backend && npm run typecheck:tests && npm run build"
   },
@@ -35,7 +35,11 @@
     "api"
   ],
   "overrides": {
-    "vite": "$vite"
+    "vite": "$vite",
+    "@oxc-parser/binding-wasm32-wasi@0.158.0": {
+      "@emnapi/core": "2.0.0-beta.3",
+      "@emnapi/runtime": "2.0.0-beta.3"
+    }
   },
   "engines": {
     "node": "26.x"
@@ -63,7 +67,7 @@
     "@angular/build": "^22.3.0",
     "@angular/cli": "^22.3.0",
     "@angular/compiler-cli": "22.3.0",
-    "@types/google.maps": "^3.66.10",
+    "@types/google.maps": "^3.67.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^5.1.1",
